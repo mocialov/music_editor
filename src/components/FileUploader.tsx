@@ -35,15 +35,18 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
   const handleExampleFileClick = async (path: string) => {
     setLoading(true);
     try {
+      console.log('Attempting to fetch:', path);
       const response = await fetch(path);
+      console.log('Response status:', response.status, response.statusText);
       if (!response.ok) {
-        throw new Error(`Failed to load file: ${response.statusText}`);
+        throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
       }
       const content = await response.text();
       onFileLoad(content);
     } catch (error) {
       console.error('Error loading example file:', error);
-      alert('Failed to load example file. Please try another one.');
+      console.error('Failed path:', path);
+      alert(`Failed to load example file. Please try another one.\nPath: ${path}\nError: ${error}`);
     } finally {
       setLoading(false);
     }
