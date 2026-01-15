@@ -5,11 +5,11 @@ interface FileUploaderProps {
 }
 
 const EXAMPLE_FILES = [
-  { name: 'Chopin - Etude Op.10 No.12', path: '/example_xmls/Chopin_Etude_Op.10_No.12.xml' },
-  { name: 'Costeley - Je vois de glissantes eaux', path: '/example_xmls/Costeley_Je_vois_de_glissantes_eaux.xml' },
-  { name: 'St. Anne', path: '/example_xmls/st_anne.xml' },
-  { name: 'Vivaldi - Winter (Concerto No.4)', path: '/example_xmls/Vivaldi_Concerto_No.4_in_F_Minor_Winter.xml' },
-  { name: 'Sample Score', path: '/example_xmls/xml_score.musicxml' },
+  { name: 'Chopin - Etude Op.10 No.12', path: `${import.meta.env.BASE_URL}example_xmls/Chopin_Etude_Op.10_No.12.xml` },
+  { name: 'Costeley - Je vois de glissantes eaux', path: `${import.meta.env.BASE_URL}example_xmls/Costeley_Je_vois_de_glissantes_eaux.xml` },
+  { name: 'St. Anne', path: `${import.meta.env.BASE_URL}example_xmls/st_anne.xml` },
+  { name: 'Vivaldi - Winter (Concerto No.4)', path: `${import.meta.env.BASE_URL}example_xmls/Vivaldi_Concerto_No.4_in_F_Minor_Winter.xml` },
+  { name: 'Sample Score', path: `${import.meta.env.BASE_URL}example_xmls/xml_score.musicxml` },
 ];
 
 export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
