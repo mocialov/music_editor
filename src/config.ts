@@ -11,7 +11,7 @@
  */
 
 export const config = {
-  DEBUG_MODE: true,
+  DEBUG_MODE: import.meta.env.VITE_DEBUG_MODE === 'true',
   GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '',
   GEMINI_MODEL_ID: import.meta.env.VITE_GEMINI_MODEL_ID || 'gemini-2.5-flash-lite',
 } as const;
