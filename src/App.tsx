@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import './App.css'
 import { FileUploader } from './components/FileUploader'
 import { MusicXMLPlayer } from './components/MusicXMLPlayer'
 import { MusicXMLStats } from './components/MusicXMLStats'
 import { SemanticStats } from './components/SemanticStats'
 import { LLMQuery } from './components/LLMQuery'
-import { MusicXMLParser, type MusicXMLDocument, type SemanticMusicXML, encodeToSemantic } from './utils/musicxml-parser'
+import { MusicXMLParser, type MusicXMLDocument, type SemanticMusicXML, encodeToSemantic, getPartsInfo } from './utils/musicxml-parser'
 import { config } from './config'
 
 function App() {
@@ -13,9 +13,20 @@ function App() {
   const [parsedDocument, setParsedDocument] = useState<MusicXMLDocument | null>(null)
   const [semanticFormat, setSemanticFormat] = useState<SemanticMusicXML | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [midiConversionInfo, setMidiConversionInfo] = useState<{ converted: boolean; fileName: string; xmlOutput: string } | null>(null)
+  const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; partId?: string } | null>(null)
+  const [availableParts, setAvailableParts] = useState<Array<{ id: string; name: string }>>([])
 
-  const handleFileLoad = (content: string) => {
+  const handleFileLoad = (content: string, metadata?: { isMidiConversion: boolean; fileName: string }) => {
     setXmlContent(content)
+    
+    // Store MIDI conversion info for debug display
+    if (metadata?.isMidiConversion) {
+      setMidiConversionInfo({ converted: true, fileName: metadata.fileName, xmlOutput: content })
+      console.log('MIDI converted to MusicXML:', content.substring(0, 500))
+    } else {
+      setMidiConversionInfo(null)
+    }
     
     // Parse MusicXML with the parser
     try {
@@ -23,9 +34,15 @@ function App() {
       const doc = parser.parse(content)
       setParsedDocument(doc)
       
+      console.log('Parsed MusicXML document:', doc)
+      
       // Encode to semantic format for LLM
       const semantic = encodeToSemantic(doc)
       setSemanticFormat(semantic)
+      
+      // Extract parts information
+      const parts = getPartsInfo(doc)
+      setAvailableParts(parts)
       
       setParseError(null)
     } catch (error) {
@@ -36,7 +53,7 @@ function App() {
     }
   }
 
-  const handleLLMResult = (document: MusicXMLDocument) => {
+  const handleLLMResult = useCallback((document: MusicXMLDocument) => {
     setParsedDocument(document)
     const semantic = encodeToSemantic(document)
     setSemanticFormat(semantic)
@@ -45,19 +62,45 @@ function App() {
     const parser = new MusicXMLParser()
     const xmlString = parser.toXML(document)
     setXmlContent(xmlString)
-  }
+  }, [])
+
+  const handleRangeSelect = useCallback((start: number, end: number, partId?: string) => {
+    if (start > 0 && end > 0) {
+      setSelectedRange({ start, end, partId })
+    } else {
+      setSelectedRange(null)
+    }
+  }, [])
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🎵 MusicXML Player</h1>
-        <p>Load and play MusicXML files with interactive sheet music</p>
+        <h1>🎵 MusicXML & MIDI Player</h1>
+        <p>Load and play MusicXML or MIDI files with interactive sheet music</p>
       </header>
 
       <main className="app-main">
         <FileUploader onFileLoad={handleFileLoad} />
         
-        <LLMQuery semanticFormat={semanticFormat} onParsedResult={handleLLMResult} />
+        {config.DEBUG_MODE && midiConversionInfo && (
+          <div className="midi-conversion-debug">
+            <h2>🎹 MIDI Conversion Debug</h2>
+            <p className="conversion-info">
+              Converted <strong>{midiConversionInfo.fileName}</strong> to MusicXML
+            </p>
+            <details>
+              <summary>View Converted MusicXML</summary>
+              <pre className="xml-output">{midiConversionInfo.xmlOutput}</pre>
+            </details>
+          </div>
+        )}
+        
+        <LLMQuery 
+          semanticFormat={semanticFormat} 
+          onParsedResult={handleLLMResult}
+          fullDocument={parsedDocument}
+          selectedRange={selectedRange}
+        />
         
         <MusicXMLStats document={parsedDocument} parseError={parseError} />
 
@@ -79,7 +122,11 @@ function App() {
           </div>
         )}
 
-        <MusicXMLPlayer xmlContent={xmlContent} />
+        <MusicXMLPlayer 
+          xmlContent={xmlContent} 
+          onRangeSelect={handleRangeSelect}
+          availableParts={availableParts}
+        />
       </main>
 
       <footer className="app-footer">

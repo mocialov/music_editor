@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
+import { convertMidiToMusicXML } from '../utils/midi-converter';
 
 interface FileUploaderProps {
-  onFileLoad: (content: string) => void;
+  onFileLoad: (content: string, metadata?: { isMidiConversion: boolean; fileName: string }) => void;
 }
 
 const EXAMPLE_FILES = [
@@ -13,23 +14,57 @@ const EXAMPLE_FILES = [
 ];
 
 export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const musicXMLInputRef = useRef<HTMLInputElement>(null);
+  const midiInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMusicXMLFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      onFileLoad(content);
-    };
-    reader.readAsText(file);
+    setLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        onFileLoad(content, { isMidiConversion: false, fileName: file.name });
+        setLoading(false);
+      };
+      reader.onerror = () => {
+        alert('Failed to read MusicXML file');
+        setLoading(false);
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      console.error('Error processing MusicXML file:', error);
+      alert(`Failed to process MusicXML file: ${error}`);
+      setLoading(false);
+    }
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
+  const handleMIDIFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const musicXML = await convertMidiToMusicXML(arrayBuffer);
+      onFileLoad(musicXML, { isMidiConversion: true, fileName: file.name });
+    } catch (error) {
+      console.error('Error converting MIDI file:', error);
+      alert(`Failed to convert MIDI file: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMusicXMLClick = () => {
+    musicXMLInputRef.current?.click();
+  };
+
+  const handleMIDIClick = () => {
+    midiInputRef.current?.click();
   };
 
   const handleExampleFileClick = async (path: string) => {
@@ -55,15 +90,28 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
   return (
     <div className="file-uploader">
       <input
-        ref={fileInputRef}
+        ref={musicXMLInputRef}
         type="file"
         accept=".xml,.musicxml"
-        onChange={handleFileChange}
+        onChange={handleMusicXMLFileChange}
         style={{ display: 'none' }}
       />
-      <button onClick={handleClick} className="upload-button">
-        📁 Load MusicXML File
-      </button>
+      <input
+        ref={midiInputRef}
+        type="file"
+        accept=".mid,.midi"
+        onChange={handleMIDIFileChange}
+        style={{ display: 'none' }}
+      />
+      
+      <div className="upload-buttons">
+        <button onClick={handleMusicXMLClick} className="upload-button musicxml-button" disabled={loading}>
+          🎼 {loading ? 'Processing...' : 'Load MusicXML File'}
+        </button>
+        <button onClick={handleMIDIClick} className="upload-button midi-button" disabled={loading}>
+          🎹 {loading ? 'Processing...' : 'Load MIDI File'}
+        </button>
+      </div>
       
       <div className="example-files">
         <h3>Or try an example:</h3>

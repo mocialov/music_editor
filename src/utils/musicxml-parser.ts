@@ -7,13 +7,6 @@ import { z } from 'zod';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
 // ============================================================================
-// Helper for flexible number/string fields
-// ============================================================================
-
-// Keep as union of number | string without coercion
-const flexibleNumeric = () => z.union([z.number(), z.string()]);
-
-// ============================================================================
 // Zod Schemas (matching Pydantic models)
 // ============================================================================
 
@@ -38,38 +31,38 @@ export const IdentificationSchema = z.object({
 }).passthrough();
 
 export const ScalingSchema = z.object({
-  millimeters: flexibleNumeric(),
-  tenths: flexibleNumeric(),
+  millimeters: z.union([z.number(), z.string()]),
+  tenths: z.union([z.number(), z.string()]),
 }).passthrough();
 
 export const PageMarginsSchema = z.object({
   '@type': z.string(),
-  'left-margin': flexibleNumeric(),
-  'right-margin': flexibleNumeric(),
-  'top-margin': flexibleNumeric(),
-  'bottom-margin': flexibleNumeric(),
+  'left-margin': z.union([z.number(), z.string()]),
+  'right-margin': z.union([z.number(), z.string()]),
+  'top-margin': z.union([z.number(), z.string()]),
+  'bottom-margin': z.union([z.number(), z.string()]),
 }).passthrough();
 
 export const PageLayoutSchema = z.object({
-  'page-height': flexibleNumeric().optional(),
-  'page-width': flexibleNumeric().optional(),
+  'page-height': z.union([z.number(), z.string()]).optional(),
+  'page-width': z.union([z.number(), z.string()]).optional(),
   'page-margins': z.union([PageMarginsSchema, z.array(PageMarginsSchema)]).optional(),
 }).passthrough();
 
 export const SystemMarginsSchema = z.object({
-  'left-margin': flexibleNumeric(),
-  'right-margin': flexibleNumeric(),
+  'left-margin': z.union([z.number(), z.string()]),
+  'right-margin': z.union([z.number(), z.string()]),
 }).passthrough();
 
 export const SystemLayoutSchema = z.object({
   'system-margins': SystemMarginsSchema.optional(),
-  'system-distance': flexibleNumeric().optional(),
-  'top-system-distance': flexibleNumeric().optional(),
+  'system-distance': z.union([z.number(), z.string()]).optional(),
+  'top-system-distance': z.union([z.number(), z.string()]).optional(),
 }).passthrough();
 
 export const StaffLayoutSchema = z.object({
-  '@number': flexibleNumeric().optional(),
-  'staff-distance': flexibleNumeric().optional(),
+  '@number': z.union([z.number(), z.string()]).optional(),
+  'staff-distance': z.union([z.number(), z.string()]).optional(),
 }).passthrough();
 
 export const AppearanceSchema = z.object({
@@ -89,8 +82,8 @@ export const DefaultsSchema = z.object({
 }).passthrough();
 
 export const CreditWordsSchema = z.object({
-  '@default-x': flexibleNumeric().optional(),
-  '@default-y': flexibleNumeric().optional(),
+  '@default-x': z.union([z.number(), z.string()]).optional(),
+  '@default-y': z.union([z.number(), z.string()]).optional(),
   '@font-size': z.union([z.number(), z.string()]).optional(),
   '@font-family': z.string().optional(),
   '@font-weight': z.string().optional(),
@@ -828,6 +821,299 @@ export function processLLMOutput(llmOutput: unknown): MusicXMLDocument {
 }
 
 // ============================================================================
+// Measure Range Extraction and Replacement
+// ============================================================================
+
+/**
+ * Extract a range of measures from a MusicXML document
+ * @param document - Full MusicXML document
+ * @param startMeasure - Starting measure number (1-based, inclusive)
+ * @param endMeasure - Ending measure number (1-based, inclusive)
+ * @param partId - Optional part ID to extract only specific part (e.g., 'P1', 'P2')
+ * @returns New MusicXML document containing only the specified measures
+ */
+export function extractMeasureRange(
+  document: MusicXMLDocument,
+  startMeasure: number,
+  endMeasure: number,
+  partId?: string
+): MusicXMLDocument {
+  const score = document['score-partwise'];
+  const allParts = Array.isArray(score.part) ? score.part : [score.part];
+  
+  // Filter parts if partId is specified
+  const parts = partId 
+    ? allParts.filter(p => p['@id'] === partId)
+    : allParts;
+  
+  // Extract measures from each part
+  const extractedParts: Part[] = parts.map(part => {
+    const filteredMeasures = part.measure.filter(measure => {
+      const measureNum = Number(measure['@number']);
+      return measureNum >= startMeasure && measureNum <= endMeasure;
+    });
+    
+    return {
+      '@id': part['@id'],
+      measure: filteredMeasures,
+    };
+  });
+  
+  // Create new document with extracted measures
+  const newScore: ScorePartwise = {
+    ...score,
+    part: extractedParts.length === 1 ? extractedParts[0] : extractedParts,
+  };
+  
+  return {
+    'score-partwise': newScore,
+  };
+}
+
+/**
+ * Extract a range of measures from semantic MusicXML
+ * @param semantic - Semantic MusicXML document
+ * @param startMeasure - Starting measure number (1-based, inclusive)
+ * @param endMeasure - Ending measure number (1-based, inclusive)
+ * @returns New semantic document containing only the specified measures
+ */
+export function extractSemanticMeasureRange(
+  semantic: SemanticMusicXML,
+  startMeasure: number,
+  endMeasure: number
+): SemanticMusicXML {
+  const extractedParts: SemanticPart[] = semantic.parts.map(part => {
+    const filteredMeasures = part.measures.filter(measure => {
+      return measure.number >= startMeasure && measure.number <= endMeasure;
+    });
+    
+    return {
+      ...part,
+      measures: filteredMeasures,
+    };
+  });
+  
+  return {
+    ...semantic,
+    parts: extractedParts,
+  };
+}
+
+/**
+ * Replace a range of measures in a MusicXML document
+ * @param original - Original MusicXML document
+ * @param replacement - MusicXML document containing replacement measures
+ * @param startMeasure - Starting measure number to replace (1-based, inclusive)
+ * @param endMeasure - Ending measure number to replace (1-based, inclusive)
+ * @param partId - Optional part ID to replace only specific part
+ * @returns New MusicXML document with replaced measures
+ */
+export function replaceMeasureRange(
+  original: MusicXMLDocument,
+  replacement: MusicXMLDocument,
+  startMeasure: number,
+  endMeasure: number,
+  partId?: string
+): MusicXMLDocument {
+  const originalScore = original['score-partwise'];
+  const replacementScore = replacement['score-partwise'];
+  
+  const originalParts = Array.isArray(originalScore.part) 
+    ? originalScore.part 
+    : [originalScore.part];
+  const replacementParts = Array.isArray(replacementScore.part) 
+    ? replacementScore.part 
+    : [replacementScore.part];
+  
+  // Replace measures in each part
+  const updatedParts: Part[] = originalParts.map((part, partIndex) => {
+    // If partId is specified, only update that specific part
+    if (partId && part['@id'] !== partId) {
+      return part; // Keep this part unchanged
+    }
+    
+    const replacementPart = replacementParts.find(p => p['@id'] === part['@id']) 
+      || replacementParts[partIndex];
+    
+    if (!replacementPart) {
+      return part; // No replacement for this part
+    }
+    
+    // Split original measures into before, during, and after ranges
+    const beforeMeasures = part.measure.filter(m => Number(m['@number']) < startMeasure);
+    const afterMeasures = part.measure.filter(m => Number(m['@number']) > endMeasure);
+    
+    // Renumber replacement measures to match the target range
+    const replacementMeasures = replacementPart.measure.map((measure, index) => {
+      return {
+        ...measure,
+        '@number': String(startMeasure + index),
+      };
+    });
+    
+    // Combine measures
+    const newMeasures = [...beforeMeasures, ...replacementMeasures, ...afterMeasures];
+    
+    return {
+      '@id': part['@id'],
+      measure: newMeasures,
+    };
+  });
+  
+  // Create new document
+  const newScore: ScorePartwise = {
+    ...originalScore,
+    part: updatedParts.length === 1 ? updatedParts[0] : updatedParts,
+  };
+  
+  return {
+    'score-partwise': newScore,
+  };
+}
+
+/**
+ * Replace a range of measures in semantic MusicXML
+ * @param original - Original semantic MusicXML document
+ * @param replacement - Semantic MusicXML document containing replacement measures
+ * @param startMeasure - Starting measure number to replace (1-based, inclusive)
+ * @param endMeasure - Ending measure number to replace (1-based, inclusive)
+ * @returns New semantic document with replaced measures
+ */
+export function replaceSemanticMeasureRange(
+  original: SemanticMusicXML,
+  replacement: SemanticMusicXML,
+  startMeasure: number,
+  endMeasure: number
+): SemanticMusicXML {
+  const updatedParts: SemanticPart[] = original.parts.map((part, partIndex) => {
+    const replacementPart = replacement.parts.find(p => p.id === part.id) 
+      || replacement.parts[partIndex];
+    
+    if (!replacementPart) {
+      return part; // No replacement for this part
+    }
+    
+    // Split original measures
+    const beforeMeasures = part.measures.filter(m => m.number < startMeasure);
+    const afterMeasures = part.measures.filter(m => m.number > endMeasure);
+    
+    // Renumber replacement measures
+    const replacementMeasures = replacementPart.measures.map((measure, index) => {
+      return {
+        ...measure,
+        number: startMeasure + index,
+      };
+    });
+    
+    return {
+      ...part,
+      measures: [...beforeMeasures, ...replacementMeasures, ...afterMeasures],
+    };
+  });
+  
+  return {
+    ...original,
+    parts: updatedParts,
+  };
+}
+
+/**
+ * Get information about all parts in a MusicXML document
+ * @param document - MusicXML document
+ * @returns Array of part information (id, name)
+ */
+export function getPartsInfo(document: MusicXMLDocument): Array<{ id: string; name: string }> {
+  const score = document['score-partwise'];
+  const partList = score['part-list'];
+  const scoreParts = Array.isArray(partList['score-part']) 
+    ? partList['score-part'] 
+    : [partList['score-part']];
+  
+  return scoreParts.map(sp => ({
+    id: sp['@id'],
+    name: sp['part-name'],
+  }));
+}
+
+/**
+ * Get total number of measures in a MusicXML document
+ * @param document - MusicXML document
+ * @returns Number of measures (uses first part as reference)
+ */
+export function getTotalMeasures(document: MusicXMLDocument): number {
+  const score = document['score-partwise'];
+  const parts = Array.isArray(score.part) ? score.part : [score.part];
+  return parts[0]?.measure.length || 0;
+}
+
+/**
+ * Get total number of measures in semantic MusicXML
+ * @param semantic - Semantic MusicXML document
+ * @returns Number of measures (uses first part as reference)
+ */
+export function getSemanticTotalMeasures(semantic: SemanticMusicXML): number {
+  return semantic.parts[0]?.measures.length || 0;
+}
+
+/**
+ * Complete workflow for editing a measure range with LLM
+ * 1. Extract measure range from original document
+ * 2. Encode to semantic format for LLM
+ * 3. Process LLM response
+ * 4. Decode and replace in original document
+ * 
+ * @param original - Original MusicXML document
+ * @param startMeasure - Starting measure number (1-based, inclusive)
+ * @param endMeasure - Ending measure number (1-based, inclusive)
+ * @param llmResponse - LLM response (semantic format, as object or JSON string)
+ * @param partId - Optional part ID to edit only specific part
+ * @returns Updated MusicXML document with replaced measures
+ */
+export function editMeasureRangeWithLLM(
+  original: MusicXMLDocument,
+  startMeasure: number,
+  endMeasure: number,
+  llmResponse: unknown,
+  partId?: string
+): MusicXMLDocument {
+  // Parse and validate LLM response
+  const parser = new SemanticMusicXMLParser();
+  let modifiedSemantic: SemanticMusicXML;
+  
+  if (typeof llmResponse === 'string') {
+    modifiedSemantic = parser.parseJSON(llmResponse);
+  } else {
+    modifiedSemantic = parser.validate(llmResponse);
+  }
+  
+  // Convert modified semantic to full MusicXML
+  const modifiedDocument = decodeFromSemantic(modifiedSemantic);
+  
+  // Replace the range in original document
+  return replaceMeasureRange(original, modifiedDocument, startMeasure, endMeasure, partId);
+}
+
+/**
+ * Prepare a measure range for LLM editing
+ * Extracts the range and encodes to semantic format
+ * 
+ * @param document - Full MusicXML document
+ * @param startMeasure - Starting measure number (1-based, inclusive)
+ * @param endMeasure - Ending measure number (1-based, inclusive)
+ * @param partId - Optional part ID to edit only specific part
+ * @returns Semantic MusicXML for the specified range (ready to send to LLM)
+ */
+export function prepareMeasureRangeForLLM(
+  document: MusicXMLDocument,
+  startMeasure: number,
+  endMeasure: number,
+  partId?: string
+): SemanticMusicXML {
+  const extracted = extractMeasureRange(document, startMeasure, endMeasure, partId);
+  return encodeToSemantic(extracted);
+}
+
+// ============================================================================
 // Semantic Encoding/Decoding (LLM-Friendly Format)
 // ============================================================================
 
@@ -1208,9 +1494,7 @@ function decodeMeasures(semanticMeasures: SemanticMeasure[]): Measure[] {
     
     // Attributes
     if (semMeasure.attributes) {
-      const attrs: Attributes = {
-        voice: 1,
-      };
+      const attrs: Attributes = {};
       
       if (semMeasure.attributes.divisions) {
         attrs.divisions = semMeasure.attributes.divisions;

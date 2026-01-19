@@ -58,7 +58,7 @@ Start the development server:
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173/music_editor/](http://localhost:5173/music_editor/) in your browser.
 
 ### Build
 
@@ -73,6 +73,44 @@ Preview production build:
 ```bash
 npm run preview
 ```
+
+## Available NPM Scripts
+
+### Core Development Scripts
+
+- **`npm run dev`** - Start Vite development server with hot module replacement
+- **`npm run build`** - Build for production (runs TypeScript compiler + Vite build)
+- **`npm run preview`** - Preview production build locally
+- **`npm run lint`** - Run ESLint to check code quality
+
+### Deployment Scripts
+
+- **`npm run predeploy`** - Automatically runs before deploy (builds the project)
+- **`npm run deploy`** - Deploy to GitHub Pages using gh-pages
+
+### Testing & Validation Scripts
+
+- **`npm run inspect-midi`** - Display detailed MIDI file information (tempo, time signature, tracks, notes, pitch range)
+  ```bash
+  npm run inspect-midi tests/my-test/input.mid
+  ```
+
+- **`npm run ground-truth <test-folder>`** - Check for and validate ground truth MusicXML files for regression testing
+  ```bash
+  npm run ground-truth old-macdonald-had-a-farm
+  ```
+
+- **`npm run test:regression`** - Run regression tests to validate all test cases and ground truth files
+  ```bash
+  npm run test:regression
+  ```
+
+- **`npm run test <test-folder>`** - Validate specific MIDI conversion against ground truth
+  ```bash
+  npm run test old-macdonald-had-a-farm
+  ```
+
+For more details on testing and ground truth generation, see [tests/README.md](tests/README.md)
 
 ## Usage
 
@@ -109,3 +147,7 @@ frontend/
 ## License
 
 MIT
+
+
+
+npm run test tests/old-macdonald-had-a-farm.mid tests/old-macdonald-had-a-farm.musicxml

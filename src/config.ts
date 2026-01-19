@@ -11,11 +11,7 @@
  */
 
 export const config = {
-  DEBUG_MODE: false, // Change to false for production
-  
-  // LLM Configuration
-  // In production, these will be read from environment variables
-  // In development, you can set them in .env file
+  DEBUG_MODE: true,
   GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY || '',
   GEMINI_MODEL_ID: import.meta.env.VITE_GEMINI_MODEL_ID || 'gemini-2.5-flash-lite',
 } as const;

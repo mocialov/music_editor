@@ -1,19 +1,31 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { parseSemanticJSON, type SemanticMusicXML, type MusicXMLDocument, decodeFromSemantic } from '../utils/musicxml-parser';
+import { 
+  parseSemanticJSON, 
+  type SemanticMusicXML, 
+  type MusicXMLDocument, 
+  decodeFromSemantic,
+  prepareMeasureRangeForLLM,
+  editMeasureRangeWithLLM,
+} from '../utils/musicxml-parser';
 import { config } from '../config';
 
 interface LLMQueryProps {
   semanticFormat: SemanticMusicXML | null;
   onParsedResult?: (document: MusicXMLDocument) => void;
+  fullDocument?: MusicXMLDocument | null;
+  selectedRange?: { start: number; end: number; partId?: string } | null;
 }
 
-export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResult }) => {
+export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResult, fullDocument, selectedRange }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [rawResponse, setRawResponse] = useState('');
   const [parsedResponse, setParsedResponse] = useState<SemanticMusicXML | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Check if range selection is active
+  const hasRangeSelection = selectedRange && selectedRange.start > 0 && selectedRange.end > 0;
 
   const handleSendQuery = async () => {
     if (!query.trim()) {
@@ -32,9 +44,33 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
     setParsedResponse(null);
 
     try {
+      // Determine what to send to LLM (full piece or selected range)
+      let dataToSend: SemanticMusicXML;
+      let isRangeEdit = false;
+      
+      if (hasRangeSelection && fullDocument && selectedRange) {
+        // Extract only the selected range (and specific part if selected)
+        dataToSend = prepareMeasureRangeForLLM(
+          fullDocument, 
+          selectedRange.start, 
+          selectedRange.end,
+          selectedRange.partId
+        );
+        isRangeEdit = true;
+        const partInfo = selectedRange.partId ? ` (${selectedRange.partId} only)` : '';
+        console.log(`Sending measures ${selectedRange.start}-${selectedRange.end}${partInfo} to LLM`);
+      } else {
+        // Send the full piece
+        dataToSend = semanticFormat;
+      }
+      
       // Prepare the LLM prompt with user query and semantic representation
-      const semanticJson = JSON.stringify(semanticFormat, null, 2);
-      const llm_prompt = `${query}\n\nHere is the music in compact semantic format:\n\n${semanticJson}\n\nPlease respond with the modified music in the same compact semantic JSON format.`;
+      const semanticJson = JSON.stringify(dataToSend, null, 2);
+      const partInfo = isRangeEdit && selectedRange?.partId ? ` in part ${selectedRange.partId}` : '';
+      const rangeInfo = isRangeEdit && selectedRange
+        ? `\n\nNote: You are editing measures ${selectedRange.start}-${selectedRange.end}${partInfo} only. Return only these measures in the same format.`
+        : '';
+      const llm_prompt = `${query}${rangeInfo}\n\nHere is the music in compact semantic format:\n\n${semanticJson}\n\nPlease respond with the modified music in the same compact semantic JSON format.`;
 
       // Get API credentials from config
       const apiKey = config.GEMINI_API_KEY;
@@ -93,9 +129,26 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
         setParsedResponse(parsed);
 
         // Convert back to full MusicXML document if callback provided
-        if (onParsedResult) {
-          const fullDocument = decodeFromSemantic(parsed);
-          onParsedResult(fullDocument);
+        if (onParsedResult && fullDocument) {
+          let finalDocument: MusicXMLDocument;
+          
+          if (isRangeEdit && selectedRange) {
+            // Merge the edited range back into the original document
+            finalDocument = editMeasureRangeWithLLM(
+              fullDocument, 
+              selectedRange.start, 
+              selectedRange.end, 
+              parsed,
+              selectedRange.partId
+            );
+            const partInfo = selectedRange.partId ? ` (${selectedRange.partId} only)` : '';
+            console.log(`Merged edited measures ${selectedRange.start}-${selectedRange.end}${partInfo} back into original`);
+          } else {
+            // Use the full modified document
+            finalDocument = decodeFromSemantic(parsed);
+          }
+          
+          onParsedResult(finalDocument);
         }
       } catch (parseError) {
         console.error('Failed to parse LLM response:', parseError);
@@ -128,10 +181,23 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
     <div className="llm-query">
       <h2>🤖 AI Music Editor</h2>
       
+      {hasRangeSelection && selectedRange && (
+        <div className="range-indicator">
+          <span className="range-badge">
+            🎯 Editing measures {selectedRange.start}-{selectedRange.end}
+            {selectedRange.partId && <> in <strong>{selectedRange.partId}</strong></>}
+            {' '}({selectedRange.end - selectedRange.start + 1} measures selected in player below)
+          </span>
+        </div>
+      )}
+      
       <div className="query-input-container">
         <textarea
           className="query-input"
-          placeholder="Ask the AI to modify your music... (e.g., 'Transpose this piece up by 2 semitones' or 'Change the tempo to 120 BPM')"
+          placeholder={hasRangeSelection && selectedRange
+            ? `Ask the AI to modify measures ${selectedRange.start}-${selectedRange.end}... (e.g., 'Transpose up by 2 semitones' or 'Add staccato to all notes')`
+            : "Ask the AI to modify your music... (e.g., 'Transpose this piece up by 2 semitones' or 'Change the tempo to 120 BPM')"
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyPress={handleKeyPress}
@@ -143,7 +209,7 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
           onClick={handleSendQuery}
           disabled={isLoading || !semanticFormat}
         >
-          {isLoading ? '⏳ Processing...' : '🚀 Send to AI'}
+          {isLoading ? '⏳ Processing...' : hasRangeSelection ? '🎯 Edit Selected Range' : '🚀 Send to AI'}
         </button>
       </div>
 
