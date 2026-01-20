@@ -359,6 +359,110 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
     }
   };
 
+  const handleDownloadAudio = async () => {
+    if (!notesDataRef.current || notesDataRef.current.length === 0) {
+      alert('No music to export. Please load a MusicXML file first.');
+      return;
+    }
+
+    try {
+      // Calculate total duration
+      const maxTime = Math.max(...notesDataRef.current.map(n => n.time + n.duration));
+      const duration = maxTime + 1; // Add 1 second buffer
+
+      // Use Tone.Offline to render audio
+      const buffer = await Tone.Offline(({ transport }) => {
+        const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+        
+        const part = new Tone.Part((time, value) => {
+          if (typeof value === 'object' && 'note' in value && 'duration' in value) {
+            synth.triggerAttackRelease(value.note, value.duration, time);
+          }
+        }, notesDataRef.current.map(n => [n.time, n]));
+        
+        part.start(0);
+        transport.bpm.value = tempo;
+        transport.start();
+      }, duration);
+
+      // Convert to WAV
+      const audioBuffer = buffer.get() as AudioBuffer;
+      const wav = bufferToWave(audioBuffer);
+      const blob = new Blob([wav], { type: 'audio/wav' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `music_${Date.now()}.wav`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting audio:', error);
+      alert('Failed to export audio. Please try again.');
+    }
+  };
+
+  // Helper function to convert AudioBuffer to WAV
+  const bufferToWave = (buffer: AudioBuffer): ArrayBuffer => {
+    const numberOfChannels = buffer.numberOfChannels;
+    const length = buffer.length * numberOfChannels * 2;
+    const outputBuffer = new ArrayBuffer(44 + length);
+    const view = new DataView(outputBuffer);
+    const channels = [];
+    let offset = 0;
+    let pos = 0;
+
+    // Write WAV header
+    const setUint16 = (data: number) => {
+      view.setUint16(pos, data, true);
+      pos += 2;
+    };
+    const setUint32 = (data: number) => {
+      view.setUint32(pos, data, true);
+      pos += 4;
+    };
+
+    // "RIFF" chunk descriptor
+    setUint32(0x46464952);
+    setUint32(36 + length);
+    setUint32(0x45564157);
+
+    // "fmt " sub-chunk
+    setUint32(0x20746d66);
+    setUint32(16);
+    setUint16(1);
+    setUint16(numberOfChannels);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * numberOfChannels * 2);
+    setUint16(numberOfChannels * 2);
+    setUint16(16);
+
+    // "data" sub-chunk
+    setUint32(0x61746164);
+    setUint32(length);
+
+    // Write interleaved data
+    for (let i = 0; i < numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < outputBuffer.byteLength) {
+      for (let i = 0; i < numberOfChannels; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return outputBuffer;
+  };
+
   return (
     <div className="musicxml-player">
       <div className="player-controls-bar">
@@ -368,6 +472,14 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
         
         <button className="play-button" onClick={handleStop}>
           ⏹
+        </button>
+
+        <button 
+          className="play-button download-button" 
+          onClick={handleDownloadAudio}
+          title="Download as WAV"
+        >
+          ⬇ WAV
         </button>
 
         <div className="player-settings">
@@ -386,15 +498,6 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
       </div>
 
       <div className="sheet-music-container" ref={containerRef} />
-
-      {totalMeasureCount > 0 && (
-        <div style={{ padding: '1rem', background: '#f0f0f0', marginTop: '1rem' }}>
-          <strong>Debug Info:</strong> Total Measures: {totalMeasureCount} | 
-          Use Pagination: {usePagination ? 'Yes' : 'No'} | 
-          Current Page: {currentPage} | 
-          Total Pages: {totalPages}
-        </div>
-      )}
 
       {usePagination && totalMeasureCount > 0 && (
         <div className="pagination-controls">
