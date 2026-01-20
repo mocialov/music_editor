@@ -82,9 +82,13 @@ function App() {
     config.setApiKey(apiKey);
   }, [])
 
+  const handleModelIdChange = useCallback((modelId: string) => {
+    config.setModelId(modelId);
+  }, [])
+
   return (
     <div className="app">
-      <ConfigMenu onApiKeyChange={handleApiKeyChange} />
+      <ConfigMenu onApiKeyChange={handleApiKeyChange} onModelIdChange={handleModelIdChange} />
       <header className="app-header">
         <h1>🎵 MusicXML & MIDI Player</h1>
         <p>Load and play MusicXML or MIDI files with interactive sheet music</p>
