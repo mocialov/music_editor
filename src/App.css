@@ -33,19 +33,70 @@
   z-index: 100;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.home-button {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.home-button:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.home-button svg {
+  display: block;
+}
+
 .app-header h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
 }
 
-.app-header p {
+.app-header h1 .title-icon {
+  font-size: 1.75rem;
+  filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.3));
+  -webkit-text-fill-color: initial;
+}
+
+.app-header .subtitle {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .app-main {
@@ -130,26 +181,8 @@
   flex-direction: column;
   gap: 1.5rem;
   max-height: calc(100vh - 8rem);
-  overflow-y: auto;
+  overflow-y: visible;
   padding-right: 0.5rem;
-}
-
-.sidebar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: var(--bg-dark);
-  border-radius: 4px;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 4px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
 }
 
 /* Stats Redesign */
@@ -172,6 +205,27 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.stats-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.stats-grid::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+  border-radius: 4px;
+}
+
+.stats-grid::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.stats-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .stat-card {

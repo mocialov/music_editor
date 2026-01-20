@@ -73,8 +73,16 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-left">
-          <h1><span>🎹</span> Professional Music Editor</h1>
-          <p>AI-Powered Music Composition & Editing</p>
+          <button className="home-button" onClick={() => window.location.reload()} title="Home">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+          </button>
+          <div className="header-title-group">
+            <h1><span className="title-icon">🎹</span> Maestro AI</h1>
+            <p className="subtitle">Compose, Edit & Transform Music with Intelligence</p>
+          </div>
         </div>
         <div className="header-right">
           <ConfigMenu 
@@ -112,7 +120,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Professional Music Editor &copy; 2026 | Powered by AI</p>
+        <p>Maestro AI &copy; 2026 | Intelligent Music Composition Platform</p>
       </footer>
     </div>
   )
