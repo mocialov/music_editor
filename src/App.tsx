@@ -65,6 +65,10 @@ function App() {
     config.setApiKey(apiKey);
   }, [])
 
+  const handleModelIdChange = useCallback((modelId: string) => {
+    config.setModelId(modelId);
+  }, [])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -73,7 +77,10 @@ function App() {
           <p>AI-Powered Music Composition & Editing</p>
         </div>
         <div className="header-right">
-          <ConfigMenu onApiKeyChange={handleApiKeyChange} />
+          <ConfigMenu 
+            onApiKeyChange={handleApiKeyChange} 
+            onModelIdChange={handleModelIdChange}
+          />
         </div>
       </header>
 

@@ -12,6 +12,7 @@
 
 // Runtime configuration that can be updated
 let runtimeApiKey: string | null = null;
+let runtimeModelId: string | null = null;
 
 export const config = {
   DEBUG_MODE: import.meta.env.VITE_DEBUG_MODE === 'true',
@@ -22,9 +23,19 @@ export const config = {
     if (storedKey) return storedKey;
     return import.meta.env.VITE_GEMINI_API_KEY || '';
   },
-  GEMINI_MODEL_ID: import.meta.env.VITE_GEMINI_MODEL_ID || 'gemini-2.5-flash-lite',
+  get GEMINI_MODEL_ID(): string {
+    // Priority: 1. Runtime override, 2. localStorage, 3. Environment variable
+    if (runtimeModelId) return runtimeModelId;
+    const storedModelId = localStorage.getItem('user_gemini_model_id');
+    if (storedModelId) return storedModelId;
+    return import.meta.env.VITE_GEMINI_MODEL_ID || 'gemini-2.0-flash-exp';
+  },
   // Method to set runtime API key
   setApiKey(key: string) {
     runtimeApiKey = key || null;
+  },
+  // Method to set runtime model ID
+  setModelId(modelId: string) {
+    runtimeModelId = modelId || null;
   }
 };
