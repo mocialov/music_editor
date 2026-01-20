@@ -32,6 +32,8 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
       drawTitle: false,
       drawComposer: false,
       drawingParameters: 'compacttight',
+      drawPartNames: true,          // Shows full instrument names at the start
+      drawPartAbbreviations: true,  // Shows abbreviated names on subsequent systems
     });
     setOsmd(newOsmd);
     
