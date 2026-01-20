@@ -15,17 +15,37 @@ interface LLMQueryProps {
   onParsedResult?: (document: MusicXMLDocument) => void;
   fullDocument?: MusicXMLDocument | null;
   selectedRange?: { start: number; end: number; partId?: string } | null;
+  totalMeasureCount?: number;
+  availableParts?: Array<{ id: string; name: string }>;
+  onRangeSelect?: (start: number, end: number, partId?: string) => void;
 }
 
-export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResult, fullDocument, selectedRange }) => {
+export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResult, fullDocument, selectedRange, totalMeasureCount = 0, availableParts, onRangeSelect }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [rawResponse, setRawResponse] = useState('');
   const [parsedResponse, setParsedResponse] = useState<SemanticMusicXML | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStartMeasure, setSelectedStartMeasure] = useState(1);
+  const [selectedEndMeasure, setSelectedEndMeasure] = useState(1);
+  const [selectedPartId, setSelectedPartId] = useState<string | undefined>(undefined);
+  
+  // Initialize selected end measure to totalMeasureCount when it becomes available
+  React.useEffect(() => {
+    if (totalMeasureCount > 0 && selectedEndMeasure === 1) {
+      setSelectedEndMeasure(totalMeasureCount);
+    }
+  }, [totalMeasureCount]);
   
   // Check if range selection is active
   const hasRangeSelection = selectedRange && selectedRange.start > 0 && selectedRange.end > 0;
+
+  // Notify parent when range selection changes
+  React.useEffect(() => {
+    if (onRangeSelect && totalMeasureCount > 0) {
+      onRangeSelect(selectedStartMeasure, selectedEndMeasure, selectedPartId);
+    }
+  }, [selectedStartMeasure, selectedEndMeasure, selectedPartId, onRangeSelect, totalMeasureCount]);
 
   const handleSendQuery = async () => {
     if (!query.trim()) {
@@ -181,6 +201,96 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
     <div className="llm-query">
       <h2>🤖 AI Music Editor</h2>
       
+      {/* Range Selection for AI Editing */}
+      {totalMeasureCount > 0 && (
+        <div className="player-range-selection">
+          <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', fontWeight: '500' }}>🎯 Select measures for AI editing</h3>
+          <div className="range-selection-controls">
+              <div className="range-inputs-compact">
+                <div className="range-input-inline">
+                  <label>From:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalMeasureCount}
+                    value={selectedStartMeasure}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val >= 1 && val <= totalMeasureCount) {
+                        setSelectedStartMeasure(val);
+                        if (val > selectedEndMeasure) {
+                          setSelectedEndMeasure(val);
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <span className="range-separator">—</span>
+                <div className="range-input-inline">
+                  <label>To:</label>
+                  <input
+                    type="number"
+                    min={selectedStartMeasure}
+                    max={totalMeasureCount}
+                    value={selectedEndMeasure}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val >= selectedStartMeasure && val <= totalMeasureCount) {
+                        setSelectedEndMeasure(val);
+                      }
+                    }}
+                  />
+                </div>
+                <span className="selection-summary">
+                  ({selectedEndMeasure - selectedStartMeasure + 1} of {totalMeasureCount} measures)
+                </span>
+                
+                {availableParts && availableParts.length > 1 && (
+                  <div className="range-input-inline part-selector">
+                    <label>Part:</label>
+                    <select
+                      value={selectedPartId || 'all'}
+                      onChange={(e) => setSelectedPartId(e.target.value === 'all' ? undefined : e.target.value)}
+                    >
+                      <option value="all">All Parts</option>
+                      {availableParts.map(part => (
+                        <option key={part.id} value={part.id}>
+                          {part.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              
+              <div className="range-visual-selector">
+                <input
+                  type="range"
+                  min={1}
+                  max={totalMeasureCount}
+                  value={selectedStartMeasure}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setSelectedStartMeasure(val);
+                    if (val > selectedEndMeasure) {
+                      setSelectedEndMeasure(val);
+                    }
+                  }}
+                  className="range-slider-start"
+                />
+                <input
+                  type="range"
+                  min={selectedStartMeasure}
+                  max={totalMeasureCount}
+                  value={selectedEndMeasure}
+                  onChange={(e) => setSelectedEndMeasure(Number(e.target.value))}
+                  className="range-slider-end"
+                />
+              </div>
+            </div>
+        </div>
+      )}
+      
       {hasRangeSelection && selectedRange && (
         <div className="range-indicator">
           <span className="range-badge">
@@ -221,23 +331,27 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
 
       {config.DEBUG_MODE && rawResponse && (
         <div className="llm-response">
-          <h3>📝 Raw LLM Response</h3>
-          <pre className="response-text">{rawResponse}</pre>
+          <details>
+            <summary><h3>📝 Raw LLM Response</h3></summary>
+            <pre className="response-text">{rawResponse}</pre>
+          </details>
         </div>
       )}
 
       {config.DEBUG_MODE && parsedResponse && (
         <div className="parsed-response">
-          <h3>✅ Parsed Semantic Music</h3>
-          <div className="response-stats">
-            <p>Parts: {parsedResponse.parts.length}</p>
-            <p>Total Measures: {parsedResponse.parts.reduce((sum, p) => sum + p.measures.length, 0)}</p>
-            {parsedResponse.title && <p>Title: {parsedResponse.title}</p>}
-            {parsedResponse.composer && <p>Composer: {parsedResponse.composer}</p>}
-          </div>
-          <pre className="semantic-json">
-            {JSON.stringify(parsedResponse, null, 2)}
-          </pre>
+          <details>
+            <summary><h3>✅ Parsed Semantic Music</h3></summary>
+            <div className="response-stats">
+              <p>Parts: {parsedResponse.parts.length}</p>
+              <p>Total Measures: {parsedResponse.parts.reduce((sum, p) => sum + p.measures.length, 0)}</p>
+              {parsedResponse.title && <p>Title: {parsedResponse.title}</p>}
+              {parsedResponse.composer && <p>Composer: {parsedResponse.composer}</p>}
+            </div>
+            <pre className="semantic-json">
+              {JSON.stringify(parsedResponse, null, 2)}
+            </pre>
+          </details>
         </div>
       )}
 

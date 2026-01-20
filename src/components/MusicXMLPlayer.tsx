@@ -6,11 +6,9 @@ import './MusicXMLPlayer.css';
 
 interface MusicXMLPlayerProps {
   xmlContent: string | null;
-  onRangeSelect?: (start: number, end: number, partId?: string) => void;
-  availableParts?: Array<{ id: string; name: string }>;
 }
 
-export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRangeSelect, availableParts }) => {
+export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdAudioContainerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<'custom' | 'osmd-audio'>('custom');
@@ -24,10 +22,6 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
   const [totalMeasureCount, setTotalMeasureCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
-  const [rangeSelectionEnabled, setRangeSelectionEnabled] = useState(false);
-  const [selectedStartMeasure, setSelectedStartMeasure] = useState(1);
-  const [selectedEndMeasure, setSelectedEndMeasure] = useState(1);
-  const [selectedPartId, setSelectedPartId] = useState<string | undefined>(undefined);
   const synthsRef = useRef<Map<string, Tone.PolySynth>>(new Map());
   const partsRef = useRef<Map<string, Tone.Part>>(new Map());
   const notesDataRef = useRef<Map<string, Array<{ time: number; note: string; duration: number }>>>(new Map());
@@ -36,15 +30,6 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
   const seekOffsetRef = useRef<number>(0); // Track the seek offset for playback position
   const baseDurationRef = useRef<{ maxPartDuration: number; originalTempo: number }>({ maxPartDuration: 0, originalTempo: 120 });
   const triggeredCountRef = useRef<number>(0); // Track how many notes have been triggered
-
-  // Notify parent when range selection changes
-  useEffect(() => {
-    if (rangeSelectionEnabled && onRangeSelect) {
-      onRangeSelect(selectedStartMeasure, selectedEndMeasure, selectedPartId);
-    } else if (!rangeSelectionEnabled && onRangeSelect) {
-      onRangeSelect(0, 0);
-    }
-  }, [rangeSelectionEnabled, selectedStartMeasure, selectedEndMeasure, selectedPartId, onRangeSelect]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1151,116 +1136,6 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
               </>
             )}
           </div>
-          
-          {/* Range Selection for AI Editing - only show for custom player */}
-          {activeTab === 'custom' && totalMeasureCount > 0 && (
-            <div className="player-range-selection">
-              <label className="range-toggle-label">
-                <input
-                  type="checkbox"
-                  checked={rangeSelectionEnabled}
-                  onChange={(e) => {
-                    setRangeSelectionEnabled(e.target.checked);
-                    if (e.target.checked) {
-                      setSelectedEndMeasure(Math.min(4, totalMeasureCount));
-                      if (onRangeSelect) {
-                        onRangeSelect(selectedStartMeasure, Math.min(4, totalMeasureCount));
-                      }
-                    } else if (onRangeSelect) {
-                      onRangeSelect(0, 0);
-                    }
-                  }}
-                />
-                <span>🎯 Select measures for AI editing</span>
-              </label>
-              
-              {rangeSelectionEnabled && (
-                <div className="range-selection-controls">
-                  <div className="range-inputs-compact">
-                    <div className="range-input-inline">
-                      <label>From:</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={totalMeasureCount}
-                        value={selectedStartMeasure}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          if (val >= 1 && val <= totalMeasureCount) {
-                            setSelectedStartMeasure(val);
-                            if (val > selectedEndMeasure) {
-                              setSelectedEndMeasure(val);
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-                    <span className="range-separator">—</span>
-                    <div className="range-input-inline">
-                      <label>To:</label>
-                      <input
-                        type="number"
-                        min={selectedStartMeasure}
-                        max={totalMeasureCount}
-                        value={selectedEndMeasure}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          if (val >= selectedStartMeasure && val <= totalMeasureCount) {
-                            setSelectedEndMeasure(val);
-                          }
-                        }}
-                      />
-                    </div>
-                    <span className="selection-summary">
-                      ({selectedEndMeasure - selectedStartMeasure + 1} of {totalMeasureCount} measures)
-                    </span>
-                    
-                    {availableParts && availableParts.length > 1 && (
-                      <div className="range-input-inline part-selector">
-                        <label>Part:</label>
-                        <select
-                          value={selectedPartId || 'all'}
-                          onChange={(e) => setSelectedPartId(e.target.value === 'all' ? undefined : e.target.value)}
-                        >
-                          <option value="all">All Parts</option>
-                          {availableParts.map(part => (
-                            <option key={part.id} value={part.id}>
-                              {part.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="range-visual-selector">
-                    <input
-                      type="range"
-                      min={1}
-                      max={totalMeasureCount}
-                      value={selectedStartMeasure}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setSelectedStartMeasure(val);
-                        if (val > selectedEndMeasure) {
-                          setSelectedEndMeasure(val);
-                        }
-                      }}
-                      className="range-slider-start"
-                    />
-                    <input
-                      type="range"
-                      min={selectedStartMeasure}
-                      max={totalMeasureCount}
-                      value={selectedEndMeasure}
-                      onChange={(e) => setSelectedEndMeasure(Number(e.target.value))}
-                      className="range-slider-end"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
           
           {/* Progress Bar */}
           {totalDuration > 0 && (

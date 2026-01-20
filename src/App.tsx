@@ -5,7 +5,8 @@ import { MusicXMLPlayer } from './components/MusicXMLPlayer'
 import { MusicXMLStats } from './components/MusicXMLStats'
 import { SemanticStats } from './components/SemanticStats'
 import { LLMQuery } from './components/LLMQuery'
-import { MusicXMLParser, type MusicXMLDocument, type SemanticMusicXML, encodeToSemantic, getPartsInfo } from './utils/musicxml-parser'
+import { ConfigMenu } from './components/ConfigMenu'
+import { MusicXMLParser, type MusicXMLDocument, type SemanticMusicXML, encodeToSemantic, getPartsInfo, getTotalMeasures } from './utils/musicxml-parser'
 import { config } from './config'
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
   const [midiConversionInfo, setMidiConversionInfo] = useState<{ converted: boolean; fileName: string; xmlOutput: string } | null>(null)
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number; partId?: string } | null>(null)
   const [availableParts, setAvailableParts] = useState<Array<{ id: string; name: string }>>([])
+  const [totalMeasureCount, setTotalMeasureCount] = useState(0)
 
   const handleFileLoad = (content: string, metadata?: { isMidiConversion: boolean; fileName: string }) => {
     setXmlContent(content)
@@ -43,6 +45,10 @@ function App() {
       // Extract parts information
       const parts = getPartsInfo(doc)
       setAvailableParts(parts)
+      
+      // Calculate total measure count
+      const measureCount = getTotalMeasures(doc)
+      setTotalMeasureCount(measureCount)
       
       setParseError(null)
     } catch (error) {
@@ -72,8 +78,13 @@ function App() {
     }
   }, [])
 
+  const handleApiKeyChange = useCallback((apiKey: string) => {
+    config.setApiKey(apiKey);
+  }, [])
+
   return (
     <div className="app">
+      <ConfigMenu onApiKeyChange={handleApiKeyChange} />
       <header className="app-header">
         <h1>🎵 MusicXML & MIDI Player</h1>
         <p>Load and play MusicXML or MIDI files with interactive sheet music</p>
@@ -95,37 +106,40 @@ function App() {
           </div>
         )}
         
+        <MusicXMLStats document={parsedDocument} parseError={parseError} />
+        
+        {config.DEBUG_MODE && semanticFormat && (
+          <div className="semantic-format">
+            <details>
+              <summary><h2>🤖 LLM-Friendly Format</h2></summary>
+              
+              <SemanticStats 
+                semantic={semanticFormat} 
+                originalSize={xmlContent?.length || 0} 
+              />
+              
+              <p className="semantic-info">
+                Compact semantic representation for AI music editing
+              </p>
+              <pre className="semantic-json">
+                {JSON.stringify(semanticFormat, null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+        
         <LLMQuery 
           semanticFormat={semanticFormat} 
           onParsedResult={handleLLMResult}
           fullDocument={parsedDocument}
           selectedRange={selectedRange}
+          totalMeasureCount={totalMeasureCount}
+          availableParts={availableParts}
+          onRangeSelect={handleRangeSelect}
         />
-        
-        <MusicXMLStats document={parsedDocument} parseError={parseError} />
-
-        {config.DEBUG_MODE && semanticFormat && (
-          <div className="semantic-format">
-            <h2>🤖 LLM-Friendly Format</h2>
-            
-            <SemanticStats 
-              semantic={semanticFormat} 
-              originalSize={xmlContent?.length || 0} 
-            />
-            
-            <p className="semantic-info">
-              Compact semantic representation for AI music editing
-            </p>
-            <pre className="semantic-json">
-              {JSON.stringify(semanticFormat, null, 2)}
-            </pre>
-          </div>
-        )}
 
         <MusicXMLPlayer 
-          xmlContent={xmlContent} 
-          onRangeSelect={handleRangeSelect}
-          availableParts={availableParts}
+          xmlContent={xmlContent}
         />
       </main>
 
