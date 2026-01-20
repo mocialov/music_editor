@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import * as Tone from 'tone';
+import PlaybackManager from 'osmd-audio-player';
+import './MusicXMLPlayer.css';
 
 interface MusicXMLPlayerProps {
   xmlContent: string | null;
@@ -10,7 +12,11 @@ interface MusicXMLPlayerProps {
 
 export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRangeSelect, availableParts }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const osmdAudioContainerRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'custom' | 'osmd-audio'>('custom');
   const [osmd, setOsmd] = useState<OpenSheetMusicDisplay | null>(null);
+  const [osmdAudio, setOsmdAudio] = useState<OpenSheetMusicDisplay | null>(null);
+  const [playbackManager, setPlaybackManager] = useState<PlaybackManager | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [tempo, setTempo] = useState(120);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -62,8 +68,52 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
     };
   }, []);
 
+  // Initialize OSMD Audio Player
   useEffect(() => {
-    if (!osmd || !xmlContent) return;
+    if (!osmdAudioContainerRef.current) return;
+
+    const newOsmdAudio = new OpenSheetMusicDisplay(osmdAudioContainerRef.current, {
+      autoResize: true,
+      drawTitle: true,
+      drawComposer: true,
+    });
+
+    setOsmdAudio(newOsmdAudio);
+
+    return () => {
+      if (playbackManager) {
+        playbackManager.stop();
+      }
+    };
+  }, []);
+
+  // Load and setup OSMD Audio Player
+  useEffect(() => {
+    if (!osmdAudio || !xmlContent || activeTab !== 'osmd-audio') return;
+
+    const loadAndSetup = async () => {
+      try {
+        console.log('Loading MusicXML into OSMD Audio Player...');
+        await osmdAudio.load(xmlContent);
+        osmdAudio.render();
+        
+        // Create PlaybackManager (it's actually PlaybackEngine)
+        // Note: There's a version mismatch between osmd-audio-player's OSMD version and ours
+        // Using type assertion as workaround
+        const manager = new PlaybackManager();
+        await manager.loadScore(osmdAudio as any);
+        setPlaybackManager(manager);
+        console.log('OSMD Audio Player ready');
+      } catch (error) {
+        console.error('Error loading OSMD Audio Player:', error);
+      }
+    };
+
+    loadAndSetup();
+  }, [osmdAudio, xmlContent, activeTab]);
+
+  useEffect(() => {
+    if (!osmd || !xmlContent || activeTab !== 'custom') return;
 
     const loadAndRender = async () => {
       try {
@@ -103,8 +153,22 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
     loadAndRender();
   }, [osmd, xmlContent, visibleMeasures]);
 
-  // Helper function to create appropriate synth based on MIDI program number
-  const createSynthForProgram = (program: number, volume: number = -6, pan: number = 0): Tone.PolySynth => {
+  // Helper function to create appropriate synth based on MIDI program number and channel
+  const createSynthForProgram = (program: number, channel: number, volume: number = -6, pan: number = 0): Tone.PolySynth => {
+    // Channel 10 is always drums - use membrane synth for percussion sounds
+    if (channel === 10) {
+      const panner = new Tone.Panner(pan).toDestination();
+      const synth = new Tone.PolySynth(Tone.MembraneSynth, {
+        pitchDecay: 0.05,
+        octaves: 4,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.001, decay: 0.2, sustain: 0.0, release: 0.2 },
+        volume,
+      }).connect(panner);
+      synth.maxPolyphony = 16; // Drums often have many simultaneous hits
+      return synth;
+    }
+    
     // MIDI program groups: 0-7=Piano, 8-15=Chromatic Percussion, 16-23=Organ, 
     // 24-31=Guitar, 32-39=Bass, 40-47=Strings, 48-55=Ensemble, 56-63=Brass,
     // 64-71=Reed, 72-79=Pipe, 80-87=Synth Lead, 88-95=Synth Pad, etc.
@@ -579,6 +643,7 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
           
           const synth = createSynthForProgram(
             partInfo?.program ?? 0,
+            partInfo?.channel ?? 1,
             partInfo?.volume ?? -6,
             finalPan
           );
@@ -662,6 +727,15 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
   };
 
   const handlePlay = async () => {
+    if (activeTab === 'osmd-audio') {
+      if (playbackManager) {
+        await playbackManager.play();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    // Custom playback
     if (partsRef.current.size === 0) {
       console.error('No parts available for playback');
       return;
@@ -706,6 +780,15 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
   };
 
   const handlePause = () => {
+    if (activeTab === 'osmd-audio') {
+      if (playbackManager) {
+        playbackManager.pause();
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    // Custom playback
     Tone.getTransport().pause();
     setIsPlaying(false);
     if (animationFrameRef.current) {
@@ -1024,6 +1107,22 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
     <div className="musicxml-player">
       {xmlContent && (
         <>
+          {/* Tab Navigation */}
+          <div className="player-tabs">
+            <button 
+              className={activeTab === 'custom' ? 'active' : ''} 
+              onClick={() => setActiveTab('custom')}
+            >
+              Custom Player
+            </button>
+            <button 
+              className={activeTab === 'osmd-audio' ? 'active' : ''} 
+              onClick={() => setActiveTab('osmd-audio')}
+            >
+              OSMD Audio Player
+            </button>
+          </div>
+
           <div className="controls">
             <button onClick={handlePlay} disabled={isPlaying}>
               ▶ Play
@@ -1034,23 +1133,27 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
             <button onClick={handleStop}>
               ⏹ Stop
             </button>
-            <button onClick={handleDownload} disabled={isDownloading}>
-              {isDownloading ? '⏳ Downloading...' : '⬇ Download WAV'}
-            </button>
-            <label>
-              Tempo: {tempo} BPM
-              <input
-                type="range"
-                min="40"
-                max="240"
-                value={tempo}
-                onChange={(e) => handleTempoChange(Number(e.target.value))}
-              />
-            </label>
+            {activeTab === 'custom' && (
+              <>
+                <button onClick={handleDownload} disabled={isDownloading}>
+                  {isDownloading ? '⏳ Downloading...' : '⬇ Download WAV'}
+                </button>
+                <label>
+                  Tempo: {tempo} BPM
+                  <input
+                    type="range"
+                    min="40"
+                    max="240"
+                    value={tempo}
+                    onChange={(e) => handleTempoChange(Number(e.target.value))}
+                  />
+                </label>
+              </>
+            )}
           </div>
           
-          {/* Range Selection for AI Editing */}
-          {totalMeasureCount > 0 && (
+          {/* Range Selection for AI Editing - only show for custom player */}
+          {activeTab === 'custom' && totalMeasureCount > 0 && (
             <div className="player-range-selection">
               <label className="range-toggle-label">
                 <input
@@ -1188,7 +1291,12 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent, onRa
       <div 
         ref={containerRef} 
         className="sheet-music-container"
-        style={{ width: '100%', overflow: 'auto' }}
+        style={{ width: '100%', overflow: 'auto', display: activeTab === 'custom' ? 'block' : 'none' }}
+      />
+      <div 
+        ref={osmdAudioContainerRef} 
+        className="sheet-music-container"
+        style={{ width: '100%', overflow: 'auto', display: activeTab === 'osmd-audio' ? 'block' : 'none' }}
       />
     </div>
   );

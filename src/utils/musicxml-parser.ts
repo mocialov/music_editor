@@ -475,6 +475,22 @@ export const SemanticTupletSchema = z.object({
   normalNotes: z.number(),
 });
 
+// Helper to coerce boolean values from LLM output
+const coerceBoolean = z.preprocess((val) => {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase();
+    if (lower === 'true') return true;
+    if (lower === 'false') return false;
+    return undefined;
+  }
+  if (typeof val === 'number') return val !== 0;
+  // For objects or other types (common LLM mistake), treat as undefined
+  if (typeof val === 'object') return undefined;
+  return undefined;
+}, z.boolean().optional());
+
 export const SemanticNoteSchema = z.object({
   pitch: SemanticPitchSchema.optional(),
   duration: z.number(),
@@ -482,7 +498,7 @@ export const SemanticNoteSchema = z.object({
   dots: z.number().optional(),
   voice: z.number(),
   staff: z.number().optional(),
-  chord: z.boolean().optional(),
+  chord: coerceBoolean,
   accidental: z.string().optional(),
   articulations: z.array(z.string()).optional(),
   ornaments: z.array(z.string()).optional(),
@@ -491,7 +507,7 @@ export const SemanticNoteSchema = z.object({
   tuplet: SemanticTupletSchema.optional(),
   tie: z.enum(['start', 'stop', 'continue']).optional(),
   slur: z.enum(['start', 'stop']).optional(),
-  grace: z.boolean().optional(),
+  grace: coerceBoolean,
 });
 
 export const SemanticAttributesSchema = z.object({

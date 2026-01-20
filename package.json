@@ -20,6 +20,7 @@
     "axios": "^1.13.2",
     "fast-xml-parser": "^5.3.3",
     "opensheetmusicdisplay": "^1.9.3",
+    "osmd-audio-player": "^0.7.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tone": "^15.1.22",

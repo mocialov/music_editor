@@ -7,6 +7,303 @@ import pkg from '@tonejs/midi';
 const { Midi } = pkg;
 import type { Track } from '@tonejs/midi';
 
+// ============================================================================
+// General MIDI (GM) Instrument Definitions
+// ============================================================================
+
+/**
+ * General MIDI Level 1 Sound Set
+ * Program numbers 0-127 (internally stored as 0-indexed)
+ */
+const GM_INSTRUMENTS: Record<number, { name: string; family: string; clef: 'treble' | 'bass' | 'alto' | 'percussion' }> = {
+  // Piano (0-7)
+  0: { name: 'Acoustic Grand Piano', family: 'Piano', clef: 'treble' },
+  1: { name: 'Bright Acoustic Piano', family: 'Piano', clef: 'treble' },
+  2: { name: 'Electric Grand Piano', family: 'Piano', clef: 'treble' },
+  3: { name: 'Honky-tonk Piano', family: 'Piano', clef: 'treble' },
+  4: { name: 'Electric Piano 1', family: 'Piano', clef: 'treble' },
+  5: { name: 'Electric Piano 2', family: 'Piano', clef: 'treble' },
+  6: { name: 'Harpsichord', family: 'Piano', clef: 'treble' },
+  7: { name: 'Clavinet', family: 'Piano', clef: 'treble' },
+  
+  // Chromatic Percussion (8-15)
+  8: { name: 'Celesta', family: 'Chromatic Percussion', clef: 'treble' },
+  9: { name: 'Glockenspiel', family: 'Chromatic Percussion', clef: 'treble' },
+  10: { name: 'Music Box', family: 'Chromatic Percussion', clef: 'treble' },
+  11: { name: 'Vibraphone', family: 'Chromatic Percussion', clef: 'treble' },
+  12: { name: 'Marimba', family: 'Chromatic Percussion', clef: 'treble' },
+  13: { name: 'Xylophone', family: 'Chromatic Percussion', clef: 'treble' },
+  14: { name: 'Tubular Bells', family: 'Chromatic Percussion', clef: 'treble' },
+  15: { name: 'Dulcimer', family: 'Chromatic Percussion', clef: 'treble' },
+  
+  // Organ (16-23)
+  16: { name: 'Drawbar Organ', family: 'Organ', clef: 'treble' },
+  17: { name: 'Percussive Organ', family: 'Organ', clef: 'treble' },
+  18: { name: 'Rock Organ', family: 'Organ', clef: 'treble' },
+  19: { name: 'Church Organ', family: 'Organ', clef: 'treble' },
+  20: { name: 'Reed Organ', family: 'Organ', clef: 'treble' },
+  21: { name: 'Accordion', family: 'Organ', clef: 'treble' },
+  22: { name: 'Harmonica', family: 'Organ', clef: 'treble' },
+  23: { name: 'Tango Accordion', family: 'Organ', clef: 'treble' },
+  
+  // Guitar (24-31)
+  24: { name: 'Acoustic Guitar (nylon)', family: 'Guitar', clef: 'treble' },
+  25: { name: 'Acoustic Guitar (steel)', family: 'Guitar', clef: 'treble' },
+  26: { name: 'Electric Guitar (jazz)', family: 'Guitar', clef: 'treble' },
+  27: { name: 'Electric Guitar (clean)', family: 'Guitar', clef: 'treble' },
+  28: { name: 'Electric Guitar (muted)', family: 'Guitar', clef: 'treble' },
+  29: { name: 'Overdriven Guitar', family: 'Guitar', clef: 'treble' },
+  30: { name: 'Distortion Guitar', family: 'Guitar', clef: 'treble' },
+  31: { name: 'Guitar Harmonics', family: 'Guitar', clef: 'treble' },
+  
+  // Bass (32-39)
+  32: { name: 'Acoustic Bass', family: 'Bass', clef: 'bass' },
+  33: { name: 'Electric Bass (finger)', family: 'Bass', clef: 'bass' },
+  34: { name: 'Electric Bass (pick)', family: 'Bass', clef: 'bass' },
+  35: { name: 'Fretless Bass', family: 'Bass', clef: 'bass' },
+  36: { name: 'Slap Bass 1', family: 'Bass', clef: 'bass' },
+  37: { name: 'Slap Bass 2', family: 'Bass', clef: 'bass' },
+  38: { name: 'Synth Bass 1', family: 'Bass', clef: 'bass' },
+  39: { name: 'Synth Bass 2', family: 'Bass', clef: 'bass' },
+  
+  // Strings (40-47)
+  40: { name: 'Violin', family: 'Strings', clef: 'treble' },
+  41: { name: 'Viola', family: 'Strings', clef: 'alto' },
+  42: { name: 'Cello', family: 'Strings', clef: 'bass' },
+  43: { name: 'Contrabass', family: 'Strings', clef: 'bass' },
+  44: { name: 'Tremolo Strings', family: 'Strings', clef: 'treble' },
+  45: { name: 'Pizzicato Strings', family: 'Strings', clef: 'treble' },
+  46: { name: 'Orchestral Harp', family: 'Strings', clef: 'treble' },
+  47: { name: 'Timpani', family: 'Strings', clef: 'bass' },
+  
+  // Ensemble (48-55)
+  48: { name: 'String Ensemble 1', family: 'Ensemble', clef: 'treble' },
+  49: { name: 'String Ensemble 2', family: 'Ensemble', clef: 'treble' },
+  50: { name: 'Synth Strings 1', family: 'Ensemble', clef: 'treble' },
+  51: { name: 'Synth Strings 2', family: 'Ensemble', clef: 'treble' },
+  52: { name: 'Choir Aahs', family: 'Ensemble', clef: 'treble' },
+  53: { name: 'Voice Oohs', family: 'Ensemble', clef: 'treble' },
+  54: { name: 'Synth Choir', family: 'Ensemble', clef: 'treble' },
+  55: { name: 'Orchestra Hit', family: 'Ensemble', clef: 'treble' },
+  
+  // Brass (56-63)
+  56: { name: 'Trumpet', family: 'Brass', clef: 'treble' },
+  57: { name: 'Trombone', family: 'Brass', clef: 'bass' },
+  58: { name: 'Tuba', family: 'Brass', clef: 'bass' },
+  59: { name: 'Muted Trumpet', family: 'Brass', clef: 'treble' },
+  60: { name: 'French Horn', family: 'Brass', clef: 'treble' },
+  61: { name: 'Brass Section', family: 'Brass', clef: 'treble' },
+  62: { name: 'Synth Brass 1', family: 'Brass', clef: 'treble' },
+  63: { name: 'Synth Brass 2', family: 'Brass', clef: 'treble' },
+  
+  // Reed (64-71)
+  64: { name: 'Soprano Sax', family: 'Reed', clef: 'treble' },
+  65: { name: 'Alto Sax', family: 'Reed', clef: 'treble' },
+  66: { name: 'Tenor Sax', family: 'Reed', clef: 'treble' },
+  67: { name: 'Baritone Sax', family: 'Reed', clef: 'treble' },
+  68: { name: 'Oboe', family: 'Reed', clef: 'treble' },
+  69: { name: 'English Horn', family: 'Reed', clef: 'treble' },
+  70: { name: 'Bassoon', family: 'Reed', clef: 'bass' },
+  71: { name: 'Clarinet', family: 'Reed', clef: 'treble' },
+  
+  // Pipe (72-79)
+  72: { name: 'Piccolo', family: 'Pipe', clef: 'treble' },
+  73: { name: 'Flute', family: 'Pipe', clef: 'treble' },
+  74: { name: 'Recorder', family: 'Pipe', clef: 'treble' },
+  75: { name: 'Pan Flute', family: 'Pipe', clef: 'treble' },
+  76: { name: 'Blown Bottle', family: 'Pipe', clef: 'treble' },
+  77: { name: 'Shakuhachi', family: 'Pipe', clef: 'treble' },
+  78: { name: 'Whistle', family: 'Pipe', clef: 'treble' },
+  79: { name: 'Ocarina', family: 'Pipe', clef: 'treble' },
+  
+  // Synth Lead (80-87)
+  80: { name: 'Lead 1 (square)', family: 'Synth Lead', clef: 'treble' },
+  81: { name: 'Lead 2 (sawtooth)', family: 'Synth Lead', clef: 'treble' },
+  82: { name: 'Lead 3 (calliope)', family: 'Synth Lead', clef: 'treble' },
+  83: { name: 'Lead 4 (chiff)', family: 'Synth Lead', clef: 'treble' },
+  84: { name: 'Lead 5 (charang)', family: 'Synth Lead', clef: 'treble' },
+  85: { name: 'Lead 6 (voice)', family: 'Synth Lead', clef: 'treble' },
+  86: { name: 'Lead 7 (fifths)', family: 'Synth Lead', clef: 'treble' },
+  87: { name: 'Lead 8 (bass + lead)', family: 'Synth Lead', clef: 'treble' },
+  
+  // Synth Pad (88-95)
+  88: { name: 'Pad 1 (new age)', family: 'Synth Pad', clef: 'treble' },
+  89: { name: 'Pad 2 (warm)', family: 'Synth Pad', clef: 'treble' },
+  90: { name: 'Pad 3 (polysynth)', family: 'Synth Pad', clef: 'treble' },
+  91: { name: 'Pad 4 (choir)', family: 'Synth Pad', clef: 'treble' },
+  92: { name: 'Pad 5 (bowed)', family: 'Synth Pad', clef: 'treble' },
+  93: { name: 'Pad 6 (metallic)', family: 'Synth Pad', clef: 'treble' },
+  94: { name: 'Pad 7 (halo)', family: 'Synth Pad', clef: 'treble' },
+  95: { name: 'Pad 8 (sweep)', family: 'Synth Pad', clef: 'treble' },
+  
+  // Synth Effects (96-103)
+  96: { name: 'FX 1 (rain)', family: 'Synth Effects', clef: 'treble' },
+  97: { name: 'FX 2 (soundtrack)', family: 'Synth Effects', clef: 'treble' },
+  98: { name: 'FX 3 (crystal)', family: 'Synth Effects', clef: 'treble' },
+  99: { name: 'FX 4 (atmosphere)', family: 'Synth Effects', clef: 'treble' },
+  100: { name: 'FX 5 (brightness)', family: 'Synth Effects', clef: 'treble' },
+  101: { name: 'FX 6 (goblins)', family: 'Synth Effects', clef: 'treble' },
+  102: { name: 'FX 7 (echoes)', family: 'Synth Effects', clef: 'treble' },
+  103: { name: 'FX 8 (sci-fi)', family: 'Synth Effects', clef: 'treble' },
+  
+  // Ethnic (104-111)
+  104: { name: 'Sitar', family: 'Ethnic', clef: 'treble' },
+  105: { name: 'Banjo', family: 'Ethnic', clef: 'treble' },
+  106: { name: 'Shamisen', family: 'Ethnic', clef: 'treble' },
+  107: { name: 'Koto', family: 'Ethnic', clef: 'treble' },
+  108: { name: 'Kalimba', family: 'Ethnic', clef: 'treble' },
+  109: { name: 'Bagpipe', family: 'Ethnic', clef: 'treble' },
+  110: { name: 'Fiddle', family: 'Ethnic', clef: 'treble' },
+  111: { name: 'Shanai', family: 'Ethnic', clef: 'treble' },
+  
+  // Percussive (112-119)
+  112: { name: 'Tinkle Bell', family: 'Percussive', clef: 'treble' },
+  113: { name: 'Agogo', family: 'Percussive', clef: 'treble' },
+  114: { name: 'Steel Drums', family: 'Percussive', clef: 'treble' },
+  115: { name: 'Woodblock', family: 'Percussive', clef: 'percussion' },
+  116: { name: 'Taiko Drum', family: 'Percussive', clef: 'percussion' },
+  117: { name: 'Melodic Tom', family: 'Percussive', clef: 'percussion' },
+  118: { name: 'Synth Drum', family: 'Percussive', clef: 'percussion' },
+  119: { name: 'Reverse Cymbal', family: 'Percussive', clef: 'percussion' },
+  
+  // Sound Effects (120-127)
+  120: { name: 'Guitar Fret Noise', family: 'Sound Effects', clef: 'treble' },
+  121: { name: 'Breath Noise', family: 'Sound Effects', clef: 'treble' },
+  122: { name: 'Seashore', family: 'Sound Effects', clef: 'treble' },
+  123: { name: 'Bird Tweet', family: 'Sound Effects', clef: 'treble' },
+  124: { name: 'Telephone Ring', family: 'Sound Effects', clef: 'treble' },
+  125: { name: 'Helicopter', family: 'Sound Effects', clef: 'treble' },
+  126: { name: 'Applause', family: 'Sound Effects', clef: 'treble' },
+  127: { name: 'Gunshot', family: 'Sound Effects', clef: 'treble' },
+};
+
+/**
+ * Instrument families that should use grand staff (piano-like layout)
+ */
+const GRAND_STAFF_FAMILIES = new Set(['Piano', 'Organ']);
+
+/**
+ * Get instrument information from MIDI program number
+ */
+function getInstrumentInfo(programNumber: number): { name: string; family: string; clef: 'treble' | 'bass' | 'alto' | 'percussion' } {
+  const info = GM_INSTRUMENTS[programNumber];
+  if (info) {
+    return info;
+  }
+  // Fallback for unknown programs
+  return { name: `Program ${programNumber}`, family: 'Unknown', clef: 'treble' };
+}
+
+/**
+ * Check if instrument family should use grand staff
+ */
+function shouldUseGrandStaff(family: string): boolean {
+  return GRAND_STAFF_FAMILIES.has(family);
+}
+
+/**
+ * Detect if track is on MIDI channel 10 (drums/percussion)
+ */
+function isDrumTrack(track: Track): boolean {
+  // MIDI channel 10 (0-indexed as 9) is always drums in General MIDI
+  return track.channel === 9;
+}
+
+// ============================================================================
+// General MIDI Drum Map (MIDI Note to Drum Instrument)
+// ============================================================================
+
+/**
+ * General MIDI Drum Map - defines percussion instruments and their notation
+ * MIDI notes 27-87 are used for drums on channel 10
+ */
+const GM_DRUM_MAP: Record<number, { 
+  name: string; 
+  displayStep: string; 
+  displayOctave: number;
+  notehead?: 'x' | 'circle-x' | 'diamond' | 'triangle' | 'slash' | 'normal';
+}> = {
+  // Bass Drums
+  35: { name: 'Acoustic Bass Drum', displayStep: 'F', displayOctave: 4, notehead: 'normal' },
+  36: { name: 'Bass Drum 1', displayStep: 'F', displayOctave: 4, notehead: 'normal' },
+  
+  // Snares
+  38: { name: 'Acoustic Snare', displayStep: 'C', displayOctave: 5, notehead: 'normal' },
+  40: { name: 'Electric Snare', displayStep: 'C', displayOctave: 5, notehead: 'normal' },
+  37: { name: 'Side Stick', displayStep: 'C', displayOctave: 5, notehead: 'x' },
+  
+  // Toms
+  41: { name: 'Low Floor Tom', displayStep: 'G', displayOctave: 4, notehead: 'normal' },
+  43: { name: 'High Floor Tom', displayStep: 'A', displayOctave: 4, notehead: 'normal' },
+  45: { name: 'Low Tom', displayStep: 'B', displayOctave: 4, notehead: 'normal' },
+  47: { name: 'Low-Mid Tom', displayStep: 'D', displayOctave: 5, notehead: 'normal' },
+  48: { name: 'Hi-Mid Tom', displayStep: 'E', displayOctave: 5, notehead: 'normal' },
+  50: { name: 'High Tom', displayStep: 'F', displayOctave: 5, notehead: 'normal' },
+  
+  // Hi-Hats
+  42: { name: 'Closed Hi-Hat', displayStep: 'G', displayOctave: 5, notehead: 'x' },
+  44: { name: 'Pedal Hi-Hat', displayStep: 'G', displayOctave: 5, notehead: 'x' },
+  46: { name: 'Open Hi-Hat', displayStep: 'G', displayOctave: 5, notehead: 'circle-x' },
+  
+  // Cymbals
+  49: { name: 'Crash Cymbal 1', displayStep: 'A', displayOctave: 5, notehead: 'x' },
+  51: { name: 'Ride Cymbal 1', displayStep: 'D', displayOctave: 6, notehead: 'x' },
+  52: { name: 'Chinese Cymbal', displayStep: 'E', displayOctave: 6, notehead: 'diamond' },
+  53: { name: 'Ride Bell', displayStep: 'D', displayOctave: 6, notehead: 'diamond' },
+  55: { name: 'Splash Cymbal', displayStep: 'B', displayOctave: 5, notehead: 'x' },
+  57: { name: 'Crash Cymbal 2', displayStep: 'C', displayOctave: 6, notehead: 'x' },
+  59: { name: 'Ride Cymbal 2', displayStep: 'E', displayOctave: 6, notehead: 'x' },
+  
+  // Hand Percussion
+  39: { name: 'Hand Clap', displayStep: 'E', displayOctave: 5, notehead: 'triangle' },
+  54: { name: 'Tambourine', displayStep: 'A', displayOctave: 5, notehead: 'x' },
+  56: { name: 'Cowbell', displayStep: 'B', displayOctave: 5, notehead: 'triangle' },
+  58: { name: 'Vibraslap', displayStep: 'D', displayOctave: 6, notehead: 'diamond' },
+  
+  // Latin Percussion
+  60: { name: 'Hi Bongo', displayStep: 'D', displayOctave: 5, notehead: 'normal' },
+  61: { name: 'Low Bongo', displayStep: 'C', displayOctave: 5, notehead: 'normal' },
+  62: { name: 'Mute Hi Conga', displayStep: 'E', displayOctave: 5, notehead: 'normal' },
+  63: { name: 'Open Hi Conga', displayStep: 'E', displayOctave: 5, notehead: 'circle-x' },
+  64: { name: 'Low Conga', displayStep: 'D', displayOctave: 5, notehead: 'normal' },
+  65: { name: 'High Timbale', displayStep: 'F', displayOctave: 5, notehead: 'normal' },
+  66: { name: 'Low Timbale', displayStep: 'E', displayOctave: 5, notehead: 'normal' },
+  67: { name: 'High Agogo', displayStep: 'G', displayOctave: 5, notehead: 'triangle' },
+  68: { name: 'Low Agogo', displayStep: 'F', displayOctave: 5, notehead: 'triangle' },
+  
+  // Other
+  69: { name: 'Cabasa', displayStep: 'A', displayOctave: 5, notehead: 'slash' },
+  70: { name: 'Maracas', displayStep: 'B', displayOctave: 5, notehead: 'slash' },
+  71: { name: 'Short Whistle', displayStep: 'C', displayOctave: 6, notehead: 'triangle' },
+  72: { name: 'Long Whistle', displayStep: 'C', displayOctave: 6, notehead: 'triangle' },
+  73: { name: 'Short Guiro', displayStep: 'D', displayOctave: 6, notehead: 'slash' },
+  74: { name: 'Long Guiro', displayStep: 'D', displayOctave: 6, notehead: 'slash' },
+  75: { name: 'Claves', displayStep: 'E', displayOctave: 6, notehead: 'triangle' },
+  76: { name: 'Hi Wood Block', displayStep: 'F', displayOctave: 6, notehead: 'triangle' },
+  77: { name: 'Low Wood Block', displayStep: 'E', displayOctave: 6, notehead: 'triangle' },
+  78: { name: 'Mute Cuica', displayStep: 'G', displayOctave: 6, notehead: 'triangle' },
+  79: { name: 'Open Cuica', displayStep: 'G', displayOctave: 6, notehead: 'circle-x' },
+  80: { name: 'Mute Triangle', displayStep: 'A', displayOctave: 6, notehead: 'diamond' },
+  81: { name: 'Open Triangle', displayStep: 'A', displayOctave: 6, notehead: 'diamond' },
+};
+
+/**
+ * Get drum information from MIDI note number
+ */
+function getDrumInfo(midiNote: number) {
+  const info = GM_DRUM_MAP[midiNote];
+  if (info) {
+    return info;
+  }
+  // Fallback for unmapped drum notes - use middle line of staff
+  return {
+    name: `Drum ${midiNote}`,
+    displayStep: 'B',
+    displayOctave: 4,
+    notehead: 'normal' as const
+  };
+}
+
 interface QuantizedNote {
   midi: number;
   time: number;
@@ -29,34 +326,51 @@ interface VoicedNoteEvent extends NoteEvent {
 
 /**
  * Detect if a track is piano/keyboard music requiring grand staff (2 staves)
- * Based on pitch range and note distribution
+ * Primarily uses MIDI program number, with pitch range analysis as fallback
  */
-function isPianoTrack(notes: QuantizedNote[]): boolean {
+function isPianoTrack(notes: QuantizedNote[], track: Track): boolean {
   if (notes.length < 10) return false;
   
-  const pitches = notes.map(n => n.midi);
-  const minPitch = Math.min(...pitches);
-  const maxPitch = Math.max(...pitches);
-  const range = maxPitch - minPitch;
+  // First check: Is this a GM instrument that uses grand staff?
+  const programNumber = track.instrument.number ?? 0;
+  const instrumentInfo = getInstrumentInfo(programNumber);
   
-  console.log(`Piano detection: minPitch=${minPitch}, maxPitch=${maxPitch}, range=${range} semitones`);
-  console.log(`  - Min pitch: ${midiToNoteName(minPitch).step}${midiToNoteName(minPitch).octave}`);
-  console.log(`  - Max pitch: ${midiToNoteName(maxPitch).step}${midiToNoteName(maxPitch).octave}`);
+  console.log(`Instrument detection: Program ${programNumber} = ${instrumentInfo.name} (${instrumentInfo.family})`);
   
-  const crossesMiddleC = minPitch < 60 && maxPitch >= 60;
-  const wideRange = range >= 18;
-  const inPianoRange = minPitch >= 33 && maxPitch <= 84;
-  const hasMultipleOctaves = range >= 12;
+  // If it's a Piano or Organ family instrument, it should use grand staff
+  if (shouldUseGrandStaff(instrumentInfo.family)) {
+    console.log(`✓ Detected ${instrumentInfo.family} from GM program number - will use grand staff`);
+    return true;
+  }
   
-  const isPiano = (wideRange || crossesMiddleC || (inPianoRange && hasMultipleOctaves));
+  // Only use heuristics if program is 0 (might be unset) AND characteristics are very piano-like
+  if (programNumber === 0 || instrumentInfo.family === 'Unknown') {
+    const pitches = notes.map(n => n.midi);
+    const minPitch = Math.min(...pitches);
+    const maxPitch = Math.max(...pitches);
+    const range = maxPitch - minPitch;
+    
+    console.log(`Piano detection heuristics (fallback): minPitch=${minPitch}, maxPitch=${maxPitch}, range=${range} semitones`);
+    
+    // Very strict criteria - must have ALL of these characteristics
+    const crossesMiddleC = minPitch < 60 && maxPitch >= 60;
+    const veryWideRange = range >= 24; // At least 2 octaves
+    const inPianoRange = minPitch >= 28 && maxPitch <= 103; // Full piano range A0-G8
+    const hasPolyphony = notes.some((n, i, arr) => {
+      // Check if there are simultaneous notes (chords)
+      return arr.some((other, j) => i !== j && Math.abs(n.time - other.time) < 0.01);
+    });
+    
+    const isPianoByHeuristics = crossesMiddleC && veryWideRange && inPianoRange && hasPolyphony;
+    
+    console.log(`Piano heuristics result: ${isPianoByHeuristics} (crosses middle C: ${crossesMiddleC}, wide range: ${veryWideRange}, polyphonic: ${hasPolyphony})`);
+    
+    return isPianoByHeuristics;
+  }
   
-  console.log(`Piano detection result: ${isPiano}`);
-  console.log(`  - Crosses middle C: ${crossesMiddleC}`);
-  console.log(`  - Wide range (≥18): ${wideRange}`);
-  console.log(`  - In piano range: ${inPianoRange}`);
-  console.log(`  - Has multiple octaves: ${hasMultipleOctaves}`);
-  
-  return isPiano;
+  // Not a piano - trust the GM program number
+  console.log(`✗ Not a piano instrument (${instrumentInfo.family})`);
+  return false;
 }
 
 /**
@@ -107,11 +421,20 @@ export async function convertMidiToMusicXML(midiArrayBuffer: ArrayBuffer): Promi
       notesByChannel.set(channel, (notesByChannel.get(channel) || 0) + 1);
     });
     
+    // Get GM instrument info
+    const programNumber = track.instrument.number ?? 0;
+    const instrumentInfo = getInstrumentInfo(programNumber);
+    const isDrums = isDrumTrack(track);
+    
     console.log(`Track ${index}:`, {
       name: track.name,
       notes: track.notes.length,
       instrument: track.instrument.name,
+      gmInstrument: instrumentInfo.name,
+      family: instrumentInfo.family,
+      defaultClef: instrumentInfo.clef,
       channel: track.channel,
+      isDrums: isDrums,
       channelDistribution: Array.from(notesByChannel.entries())
     });
   });
@@ -147,18 +470,34 @@ export async function convertMidiToMusicXML(midiArrayBuffer: ArrayBuffer): Promi
   let prePartCounter = 1;
   
   separatedTracks.forEach((track) => {
+    // Handle drum tracks - they get single part with percussion notation
+    if (isDrumTrack(track)) {
+      console.log(`✓ Drum track detected: "${track.name || 'Drums'}" (Channel 10) - will use percussion notation`);
+      partDefinitions.push({
+        id: `P${prePartCounter}`,
+        name: track.name || 'Drums',
+        track: track
+      });
+      prePartCounter++;
+      return;
+    }
+    
     // Quick analysis to see if we'll split this track
     const quantizedNotes = quantizeNotes(track, divisions, tempo);
     
     // Check if this is piano music FIRST - piano should NOT be split into multiple parts
-    const isPiano = isPianoTrack(quantizedNotes);
+    const isPiano = isPianoTrack(quantizedNotes, track);
     
     if (isPiano) {
-      // Piano music - keep as single part with grand staff
-      console.log(`Track "${track.name || 'Unnamed'}" detected as PIANO - will use grand staff, NOT splitting into parts`);
+      // Piano/keyboard music - keep as single part with grand staff
+      const programNumber = track.instrument.number ?? 0;
+      const instrumentInfo = getInstrumentInfo(programNumber);
+      const instrumentName = instrumentInfo.name;
+      
+      console.log(`Track "${track.name || 'Unnamed'}" detected as GRAND STAFF instrument (${instrumentName}) - NOT splitting into parts`);
       partDefinitions.push({
         id: `P${prePartCounter}`,
-        name: track.name || `Piano`,
+        name: track.name || instrumentName,
         track: track
       });
       prePartCounter++;
@@ -207,14 +546,40 @@ export async function convertMidiToMusicXML(midiArrayBuffer: ArrayBuffer): Promi
   console.log(`Will create ${partDefinitions.length} parts in total`);
   
   partDefinitions.forEach((partDef) => {
-    xml += `    <score-part id="${partDef.id}">
+    // For drum tracks, use simple drum set naming
+    if (isDrumTrack(partDef.track)) {
+      xml += `    <score-part id="${partDef.id}">
       <part-name>${escapeXml(partDef.name)}</part-name>
       <score-instrument id="${partDef.id}-I1">
-        <instrument-name>${escapeXml(partDef.track.instrument.name)}</instrument-name>
+        <instrument-name>Drum Set</instrument-name>
+      </score-instrument>
+      <midi-instrument id="${partDef.id}-I1">
+        <midi-channel>10</midi-channel>
+        <midi-program>1</midi-program>
+      </midi-instrument>
+    </score-part>
+`;
+      return;
+    }
+    
+    // Get proper instrument name from GM specification
+    const programNumber = partDef.track.instrument.number ?? 0;
+    const instrumentInfo = getInstrumentInfo(programNumber);
+    const instrumentName = instrumentInfo.name;
+    
+    // Use GM instrument name if track name is generic or missing
+    const displayName = partDef.name.match(/^(Part \d+|Track \d+|Unnamed)/) 
+      ? instrumentName 
+      : partDef.name;
+    
+    xml += `    <score-part id="${partDef.id}">
+      <part-name>${escapeXml(displayName)}</part-name>
+      <score-instrument id="${partDef.id}-I1">
+        <instrument-name>${escapeXml(instrumentName)}</instrument-name>
       </score-instrument>
       <midi-instrument id="${partDef.id}-I1">
         <midi-channel>${(partDef.track.channel || 0) + 1}</midi-channel>
-        <midi-program>${(partDef.track.instrument.number || 0) + 1}</midi-program>
+        <midi-program>${programNumber + 1}</midi-program>
       </midi-instrument>
     </score-part>
 `;
@@ -223,12 +588,21 @@ export async function convertMidiToMusicXML(midiArrayBuffer: ArrayBuffer): Promi
   xml += `  </part-list>
 `;
 
-  // Process each track - use grand staff for piano, voice splitting for others
+  // Process each track - use percussion notation for drums, grand staff for piano, voice splitting for others
   let partCounter = 1;
   separatedTracks.forEach((track) => {
+    // Handle drum tracks with percussion notation
+    if (isDrumTrack(track)) {
+      console.log(`Converting drum track "${track.name || 'Drums'}" with percussion notation`);
+      const partXml = convertDrumTrackToPart(track, `P${partCounter}`, divisions, numerator, denominator, tempo);
+      xml += partXml;
+      partCounter++;
+      return;
+    }
+    
     // Check if this is a piano track
     const quantizedNotesForCheck = quantizeNotes(track, divisions, tempo);
-    const isPiano = isPianoTrack(quantizedNotesForCheck);
+    const isPiano = isPianoTrack(quantizedNotesForCheck, track);
     
     if (isPiano) {
       console.log(`Converting track "${track.name || 'Unnamed'}" as PIANO with grand staff`);
@@ -249,6 +623,171 @@ export async function convertMidiToMusicXML(midiArrayBuffer: ArrayBuffer): Promi
   console.log(xml.substring(0, 3000));
   console.log('=== END MUSICXML PREVIEW ===');
 
+  return xml;
+}
+
+/**
+ * Convert a drum track to MusicXML part with unpitched percussion notation
+ */
+function convertDrumTrackToPart(
+  track: Track,
+  partId: string,
+  divisions: number,
+  numerator: number,
+  denominator: number,
+  tempo: number
+): string {
+  console.log(`\n=== Converting drum track ${partId} ===`);
+  console.log('Drum notes:', track.notes.length);
+  
+  let xml = `  <part id="${partId}">
+`;
+
+  const quantizedNotes = quantizeNotes(track, divisions, tempo);
+  console.log(`Quantized ${quantizedNotes.length} drum hits`);
+  
+  const noteEvents = groupNotesIntoChords(quantizedNotes, divisions);
+  const voicedEvents = separateIntoVoices(noteEvents);
+  
+  const measureDuration = (4 / denominator) * numerator * divisions;
+  
+  const lastEventTime = voicedEvents.length > 0 
+    ? Math.max(...voicedEvents.map(e => e.time + e.duration))
+    : measureDuration;
+  const totalMeasures = Math.max(1, Math.ceil(lastEventTime / measureDuration));
+  
+  console.log(`Drum part: ${totalMeasures} measures`);
+
+  for (let measureNum = 1; measureNum <= totalMeasures; measureNum++) {
+    const measureStartTime = (measureNum - 1) * measureDuration;
+    const measureEndTime = measureNum * measureDuration;
+
+    xml += `    <measure number="${measureNum}">
+`;
+
+    // Add attributes in first measure
+    if (measureNum === 1) {
+      xml += `      <attributes>
+        <divisions>${divisions}</divisions>
+        <key>
+          <fifths>0</fifths>
+        </key>
+        <time>
+          <beats>${numerator}</beats>
+          <beat-type>${denominator}</beat-type>
+        </time>
+        <clef>
+          <sign>percussion</sign>
+          <line>2</line>
+        </clef>
+      </attributes>
+`;
+    }
+
+    // Get events for this measure
+    const measureEvents = voicedEvents.filter(
+      e => e.time >= measureStartTime && e.time < measureEndTime
+    );
+
+    // Group by voice and time
+    const eventsByVoice = new Map<number, VoicedNoteEvent[]>();
+    measureEvents.forEach(event => {
+      if (!eventsByVoice.has(event.voice)) {
+        eventsByVoice.set(event.voice, []);
+      }
+      eventsByVoice.get(event.voice)!.push(event);
+    });
+
+    const voices = Array.from(eventsByVoice.keys()).sort();
+
+    voices.forEach((voiceNum) => {
+      const voiceEvents = eventsByVoice.get(voiceNum)!.sort((a, b) => a.time - b.time);
+      let currentTime = measureStartTime;
+
+      for (let i = 0; i < voiceEvents.length; i++) {
+        const event = voiceEvents[i];
+
+        // Add rest if there's a gap
+        if (event.time > currentTime) {
+          const restDuration = Math.round(event.time - currentTime);
+          xml += addRests(restDuration, divisions, voiceNum);
+          currentTime += restDuration;
+        }
+
+        // Add the drum hit(s) - use unpitched notation
+        xml += convertDrumEventToXML(event, voiceNum);
+        currentTime = event.time + event.duration;
+      }
+
+      // Fill measure with rest if needed
+      if (currentTime < measureEndTime) {
+        const restDuration = Math.round(measureEndTime - currentTime);
+        xml += addRests(restDuration, divisions, voiceNum);
+      }
+    });
+
+    xml += `    </measure>
+`;
+  }
+
+  xml += `  </part>
+`;
+  return xml;
+}
+
+/**
+ * Convert a drum event (chord of drum hits) to MusicXML unpitched notation
+ */
+function convertDrumEventToXML(event: VoicedNoteEvent, voice: number): string {
+  let xml = '';
+  
+  const sortedNotes = [...event.notes].sort((a, b) => b.midi - a.midi); // High to low
+  
+  sortedNotes.forEach((note, noteIndex) => {
+    const drumInfo = getDrumInfo(note.midi);
+    const { noteType, dots } = getDurationComponents(note.duration, 480); // Use standard divisions
+    
+    // First note in chord doesn't get <chord/>, others do
+    const isChord = noteIndex > 0;
+    
+    xml += `      <note>
+`;
+    if (isChord) {
+      xml += `        <chord/>
+`;
+    }
+    
+    // Use unpitched notation with display-step and display-octave
+    xml += `        <unpitched>
+          <display-step>${drumInfo.displayStep}</display-step>
+          <display-octave>${drumInfo.displayOctave}</display-octave>
+        </unpitched>
+        <duration>${note.duration}</duration>
+        <voice>${voice}</voice>
+        <type>${noteType}</type>
+`;
+    
+    // Add dots if present
+    for (let d = 0; d < dots; d++) {
+      xml += `        <dot/>
+`;
+    }
+    
+    // Add notehead if not default
+    if (drumInfo.notehead && drumInfo.notehead !== 'normal') {
+      xml += `        <notehead>${drumInfo.notehead}</notehead>
+`;
+    }
+    
+    // Add stem direction (up for high drums, down for low)
+    const stemDirection = drumInfo.displayOctave >= 5 ? 'up' : 'down';
+    xml += `        <stem>${stemDirection}</stem>
+`;
+    
+    xml += `      </note>
+`;
+  });
+  
   return xml;
 }
 
@@ -339,7 +878,7 @@ function convertVoiceEventsToPart(
   voicedEvents: VoicedNoteEvent[],
   partId: string,
   _partName: string,
-  _originalTrack: Track,
+  originalTrack: Track,
   divisions: number,
   numerator: number,
   denominator: number,
@@ -354,7 +893,7 @@ function convertVoiceEventsToPart(
   const notesForKeyDetection = voicedEvents.flatMap(e => e.notes);
   const keyFifths = detectKey(notesForKeyDetection);
   
-  const clef = determineClef(notesForKeyDetection);
+  const clef = determineClef(notesForKeyDetection, originalTrack);
   
   const measureDuration = (4 / denominator) * numerator * divisions;
   
@@ -481,11 +1020,11 @@ function convertTrackToPart(
 
   const quantizedNotes = quantizeNotes(track, divisions, tempo);
   
-  const needsGrandStaff = isPianoTrack(quantizedNotes);
+  const needsGrandStaff = isPianoTrack(quantizedNotes, track);
   console.log(`Track ${partId}: Grand staff needed: ${needsGrandStaff}`);
   
   const keyFifths = detectKey(quantizedNotes);
-  const clef = determineClef(quantizedNotes);
+  const clef = determineClef(quantizedNotes, track);
   const noteEvents = groupNotesIntoChords(quantizedNotes, divisions);
   
   let voicedEvents: VoicedNoteEvent[];
@@ -1213,18 +1752,47 @@ function toFifths(pitchClass: number, isMajor: boolean): number {
 /**
  * Determine best clef based on average pitch
  */
-function determineClef(notes: QuantizedNote[]): { sign: string; line: number } {
+/**
+ * Determine appropriate clef for a track
+ * Uses GM instrument info first, then pitch range analysis
+ */
+function determineClef(notes: QuantizedNote[], track: Track): { sign: string; line: number } {
   if (notes.length === 0) return { sign: 'G', line: 2 };
   
+  // First check: Use GM instrument default clef
+  const programNumber = track.instrument.number ?? 0;
+  const instrumentInfo = getInstrumentInfo(programNumber);
+  
+  // Special handling for drums (percussion clef is rarely used in practice)
+  if (isDrumTrack(track) || instrumentInfo.clef === 'percussion') {
+    return { sign: 'percussion', line: 0 };
+  }
+  
+  // Use GM clef unless pitch analysis strongly contradicts it
   const avgPitch = notes.reduce((sum, note) => sum + note.midi, 0) / notes.length;
   
-  // Middle C is MIDI 60
-  // Bass clef typically for notes below middle C
-  // Treble clef for above
-  if (avgPitch < 60) {
-    return { sign: 'F', line: 4 }; // Bass clef
-  } else {
+  // If instrument default is bass but average pitch is very high (>72), use treble
+  if (instrumentInfo.clef === 'bass' && avgPitch > 72) {
+    console.log(`Overriding bass clef with treble due to high average pitch: ${avgPitch}`);
     return { sign: 'G', line: 2 }; // Treble clef
+  }
+  
+  // If instrument default is treble but average pitch is very low (<48), use bass
+  if (instrumentInfo.clef === 'treble' && avgPitch < 48) {
+    console.log(`Overriding treble clef with bass due to low average pitch: ${avgPitch}`);
+    return { sign: 'F', line: 4 }; // Bass clef
+  }
+  
+  // Alto clef (viola)
+  if (instrumentInfo.clef === 'alto') {
+    return { sign: 'C', line: 3 };
+  }
+  
+  // Otherwise use GM default
+  if (instrumentInfo.clef === 'bass') {
+    return { sign: 'F', line: 4 };
+  } else {
+    return { sign: 'G', line: 2 }; // Treble is default
   }
 }
 
