@@ -17,6 +17,15 @@ interface Stats {
   timeSignature: string | null;
   keySignature: string | null;
   duration: string;
+  voices: number;
+  staves: number;
+  polyphonicParts: number;
+  multiStaffParts: number;
+  tiedNotes: number;
+  graceNotes: number;
+  tuplets: number;
+  tempoChanges: number;
+  hasComplexPolyphony: boolean;
 }
 
 const getKeySignature = (fifths: number | string): string => {
@@ -54,10 +63,21 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
   let tempo: number | null = null;
   let timeSignature: string | null = null;
   let keySignature: string | null = null;
+  let voices = new Set<string>();
+  let staves = new Set<number>();
+  let tiedNotes = 0;
+  let graceNotes = 0;
+  let tuplets = 0;
+  let tempoChanges = 0;
+  let polyphonicParts = 0;
+  let multiStaffParts = 0;
+  let hasComplexPolyphony = false;
   
   parts.forEach((part: Part) => {
     totalMeasures += part.measure.length;
     let partDuration = 0;
+    const partVoices = new Set<string>();
+    const partStaves = new Set<number>();
     
     part.measure.forEach((measure: Measure) => {
       if (measure.attributes) {
@@ -68,28 +88,85 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
           const fifths = typeof attrs.key.fifths === 'string' ? parseInt(attrs.key.fifths) : attrs.key.fifths;
           keySignature = getKeySignature(fifths);
         }
+        if (attrs.staves) {
+          const stavesCount = typeof attrs.staves === 'string' ? parseInt(attrs.staves) : attrs.staves;
+          for (let i = 1; i <= stavesCount; i++) {
+            staves.add(i);
+            partStaves.add(i);
+          }
+        }
       }
 
-      if (measure.direction && !tempo) {
+      if (measure.direction) {
         const directions = Array.isArray(measure.direction) ? measure.direction : [measure.direction];
         for (const direction of directions) {
           if (direction.sound?.['@tempo']) {
-            tempo = typeof direction.sound['@tempo'] === 'string' ? parseFloat(direction.sound['@tempo']) : direction.sound['@tempo'];
-            break;
+            tempoChanges++;
+            if (!tempo) {
+              tempo = typeof direction.sound['@tempo'] === 'string' ? parseFloat(direction.sound['@tempo']) : direction.sound['@tempo'];
+            }
           }
         }
       }
       
       if (measure.note) {
         const notes = Array.isArray(measure.note) ? measure.note : [measure.note];
+        const measureVoices = new Set<string>();
+        
         notes.forEach((note: Note) => {
+          // Track voices
+          if (note.voice) {
+            const voice = typeof note.voice === 'string' ? note.voice : String(note.voice);
+            voices.add(voice);
+            partVoices.add(voice);
+            measureVoices.add(voice);
+          }
+          
+          // Track staff
+          if (note.staff) {
+            const staff = typeof note.staff === 'string' ? parseInt(note.staff) : note.staff;
+            staves.add(staff);
+            partStaves.add(staff);
+          }
+          
+          // Count tied notes
+          if (note.tie) {
+            tiedNotes++;
+          }
+          
+          // Count grace notes
+          if (note.grace) {
+            graceNotes++;
+          }
+          
+          // Count tuplets
+          if (note['time-modification']) {
+            tuplets++;
+          }
+          
           if (!note.chord && !note.grace) {
             totalNotes++;
             if (note.duration) partDuration += typeof note.duration === 'string' ? parseInt(note.duration) : note.duration;
           }
         });
+        
+        // Check for complex polyphony (multiple voices in same measure)
+        if (measureVoices.size > 1) {
+          hasComplexPolyphony = true;
+        }
       }
     });
+    
+    // Count polyphonic parts (parts with multiple voices)
+    if (partVoices.size > 1) {
+      polyphonicParts++;
+    }
+    
+    // Count multi-staff parts
+    if (partStaves.size > 1) {
+      multiStaffParts++;
+    }
+    
     maxDuration = Math.max(maxDuration, partDuration);
   });
   
@@ -97,7 +174,27 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
   const durationSeconds = ((maxDuration / divisions) / beatsPerMinute) * 60;
   const duration = `${Math.floor(durationSeconds / 60)}:${Math.floor(durationSeconds % 60).toString().padStart(2, '0')}`;
 
-  return { totalParts: parts.length, totalMeasures, totalNotes, title, composer, partNames, tempo, timeSignature, keySignature, duration };
+  return { 
+    totalParts: parts.length, 
+    totalMeasures, 
+    totalNotes, 
+    title, 
+    composer, 
+    partNames, 
+    tempo, 
+    timeSignature, 
+    keySignature, 
+    duration,
+    voices: voices.size,
+    staves: staves.size,
+    polyphonicParts,
+    multiStaffParts,
+    tiedNotes,
+    graceNotes,
+    tuplets,
+    tempoChanges,
+    hasComplexPolyphony
+  };
 };
 
 export const MusicXMLStats: React.FC<MusicXMLStatsProps> = ({ document, parseError }) => {
@@ -112,35 +209,69 @@ export const MusicXMLStats: React.FC<MusicXMLStatsProps> = ({ document, parseErr
     <div className="musicxml-stats">
       <h3>📊 Score Details</h3>
       <div className="stats-grid">
-        <div className="stat-card featured">
-          <span className="stat-label">Title</span>
-          <span className="stat-value">{stats.title || 'Untitled'}</span>
-        </div>
-        {stats.composer && (
-          <div className="stat-card">
-            <span className="stat-label">Composer</span>
-            <span className="stat-value">{stats.composer}</span>
-          </div>
-        )}
         <div className="stat-card">
-          <span className="stat-label">Measures</span>
+          <span className="stat-label">📏 Parts</span>
+          <span className="stat-value">{stats.totalParts}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">📐 Measures</span>
           <span className="stat-value">{stats.totalMeasures}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Key</span>
+          <span className="stat-label">🎼 Notes</span>
+          <span className="stat-value">{stats.totalNotes}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">⏱️ Duration</span>
+          <span className="stat-value">{stats.duration}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🎹 Key</span>
           <span className="stat-value">{stats.keySignature || 'C'}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Time</span>
+          <span className="stat-label">🎵 Time</span>
           <span className="stat-value">{stats.timeSignature || '4/4'}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Tempo</span>
-          <span className="stat-value">{stats.tempo || 120} BPM</span>
+          <span className="stat-label">⏩ Tempo</span>
+          <span className="stat-value">{stats.tempo ? stats.tempo.toFixed(2) : '120.00'} BPM</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Duration</span>
-          <span className="stat-value">{stats.duration}</span>
+          <span className="stat-label">🎤 Voices</span>
+          <span className="stat-value">{stats.voices}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">📊 Staves</span>
+          <span className="stat-value">{stats.staves}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🎭 Polyphonic Parts</span>
+          <span className="stat-value">{stats.polyphonicParts}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🎹 Multi-Staff Parts</span>
+          <span className="stat-value">{stats.multiStaffParts}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🔗 Tied Notes</span>
+          <span className="stat-value">{stats.tiedNotes}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">✨ Grace Notes</span>
+          <span className="stat-value">{stats.graceNotes}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">3️⃣ Tuplets</span>
+          <span className="stat-value">{stats.tuplets}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🎚️ Tempo Changes</span>
+          <span className="stat-value">{stats.tempoChanges}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">🎼 Complex Polyphony</span>
+          <span className="stat-value">{stats.hasComplexPolyphony ? 'Yes' : 'No'}</span>
         </div>
       </div>
     </div>
