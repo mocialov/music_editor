@@ -5,6 +5,7 @@ import { AudioRecorder } from './AudioRecorder';
 interface FileUploaderProps {
   onFileLoad: (content: string, metadata?: { isMidiConversion: boolean; fileName: string }) => void;
   onMidiGenerated?: (midiBlob: Blob) => void;
+  conversionError?: string | null;
 }
 
 const EXAMPLE_FILES = [
@@ -14,7 +15,7 @@ const EXAMPLE_FILES = [
   { name: 'Sample Score', path: `${import.meta.env.BASE_URL}example_xmls/xml_score.musicxml` },
 ];
 
-export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onMidiGenerated }) => {
+export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onMidiGenerated, conversionError }) => {
   const musicXMLInputRef = useRef<HTMLInputElement>(null);
   const midiInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +77,22 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onMidiGe
       <div className="upload-content">
         <div className="upload-icon"></div>
         <h2>Start Your Composition</h2>
+        
+        {/* Show conversion error */}
+        {conversionError && (
+          <div className="error-message" style={{ 
+            padding: '12px 16px',
+            marginBottom: '20px',
+            backgroundColor: '#fee',
+            border: '1px solid #fcc',
+            borderRadius: '8px',
+            color: '#c33',
+            fontSize: '14px',
+            lineHeight: '1.5'
+          }}>
+            <strong>⚠️ Conversion Error:</strong> {conversionError}
+          </div>
+        )}
         
         {/* Tab Navigation */}
         <div className="tab-navigation">

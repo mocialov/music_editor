@@ -20,6 +20,7 @@ function App() {
 
   const handleFileLoad = (content: string) => {
     setXmlContent(content)
+    setParseError(null) // Clear any previous errors
     
     try {
       const parser = new MusicXMLParser()
@@ -82,7 +83,12 @@ function App() {
       handleFileLoad(musicXML)
     } catch (error) {
       console.error('Error converting MIDI to MusicXML:', error)
-      setParseError(error instanceof Error ? error.message : 'Failed to convert MIDI to MusicXML')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to convert MIDI to MusicXML'
+      // Show user-friendly error for common cases
+      const displayMessage = errorMessage.includes('No tracks with notes') 
+        ? 'No musical notes were detected in the audio. The recording may be too quiet, too noisy, or not contain clear pitched sounds. Please try recording again with clearer audio.'
+        : `Error converting to sheet music: ${errorMessage}`
+      setParseError(displayMessage)
     }
   }, [])
 
@@ -111,7 +117,11 @@ function App() {
 
       <main className="app-main">
         {!xmlContent ? (
-          <FileUploader onFileLoad={handleFileLoad} onMidiGenerated={handleMidiGenerated} />
+          <FileUploader 
+            onFileLoad={handleFileLoad} 
+            onMidiGenerated={handleMidiGenerated} 
+            conversionError={parseError}
+          />
         ) : (
           <>
             <aside className="sidebar">
@@ -137,7 +147,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>Maestro AI &copy; 2026 | Intelligent Music Composition Platform</p>
+        <p>Mæstro AI &copy; 2026 | Intelligent Music Composition Platform</p>
       </footer>
     </div>
   )

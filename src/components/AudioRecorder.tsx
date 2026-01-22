@@ -176,6 +176,13 @@ export function AudioRecorder({ onMidiGenerated }: AudioRecorderProps) {
         console.log(`Detected low notes (avg: ${avgPitch.toFixed(1)}). Applying +1 octave correction.`)
       }
       
+      // Check if any notes were detected
+      if (notes.length === 0) {
+        setError('No musical notes detected in the audio. Please try recording clearer audio with stronger, sustained tones.')
+        setIsProcessing(false)
+        return
+      }
+      
       notes.forEach(note => {
         track.addNote({
           midi: Math.min(127, note.pitchMidi + octaveShift), // Ensure we don't exceed MIDI range
@@ -184,6 +191,8 @@ export function AudioRecorder({ onMidiGenerated }: AudioRecorderProps) {
           velocity: note.amplitude
         })
       })
+      
+      console.log(`Detected ${notes.length} notes from audio`)
       
       // Convert MIDI to blob
       const midiArray = midi.toArray()

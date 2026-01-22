@@ -54,7 +54,7 @@
       <note-size type="grace">50</note-size>
       <note-size type="cue">50</note-size>
     </appearance>
-    <music-font font-family="Maestro" font-size="20.4"/>
+    <music-font font-family="Mæstro" font-size="20.4"/>
     <word-font font-family="Times New Roman" font-size="8.5"/>
   </defaults>
   <credit page="1">

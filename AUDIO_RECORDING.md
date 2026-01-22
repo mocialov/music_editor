@@ -1,7 +1,7 @@
 # Audio Recording to MIDI Feature
 
 ## Overview
-The Maestro AI application now includes an audio recording feature that allows you to record your voice or instrument and convert it to MIDI using Spotify's Basic Pitch machine learning model.
+The Mæstro AI application now includes an audio recording feature that allows you to record your voice or instrument and convert it to MIDI using Spotify's Basic Pitch machine learning model.
 
 ## How It Works
 
