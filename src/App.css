@@ -122,10 +122,6 @@
   transition: all 0.2s ease;
 }
 
-.file-uploader:hover {
-  border-color: var(--primary-color);
-}
-
 .upload-buttons {
   display: flex;
   gap: 1rem;
