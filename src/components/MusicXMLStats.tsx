@@ -56,7 +56,7 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
   const scoreParts = Array.isArray(partList['score-part']) ? partList['score-part'] : [partList['score-part']];
   const partNames = scoreParts.map(sp => sp['part-name']);
 
-  let totalMeasures = 0;
+  let maxMeasures = 0;
   let totalNotes = 0;
   let divisions = 4;
   let maxDuration = 0;
@@ -74,8 +74,8 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
   let hasComplexPolyphony = false;
   
   parts.forEach((part: Part) => {
-    totalMeasures += part.measure.length;
-    let partDuration = 0;
+    maxMeasures = Math.max(maxMeasures, part.measure.length);
+    const voiceDurations = new Map<string, number>();
     const partVoices = new Set<string>();
     const partStaves = new Set<number>();
     
@@ -115,8 +115,8 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
         
         notes.forEach((note: Note) => {
           // Track voices
+          const voice = note.voice ? (typeof note.voice === 'string' ? note.voice : String(note.voice)) : '1';
           if (note.voice) {
-            const voice = typeof note.voice === 'string' ? note.voice : String(note.voice);
             voices.add(voice);
             partVoices.add(voice);
             measureVoices.add(voice);
@@ -154,10 +154,11 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
             totalNotes++;
           }
           
-          // Duration tracking: only for non-chord, non-grace notes to avoid double-counting time
+          // Duration tracking: track each voice separately since voices play in parallel
           // note.chord and note.grace can be empty objects {}, so check for undefined
           if (note.chord === undefined && note.grace === undefined && note.duration) {
-            partDuration += typeof note.duration === 'string' ? parseInt(note.duration) : note.duration;
+            const noteDuration = typeof note.duration === 'string' ? parseInt(note.duration) : note.duration;
+            voiceDurations.set(voice, (voiceDurations.get(voice) || 0) + noteDuration);
           }
         });
         
@@ -177,6 +178,8 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
     if (partStaves.size > 1) {
       multiStaffParts++;
     }
+    // Get the maximum duration across all voices in this part (voices play in parallel)
+    const partDuration = Math.max(...Array.from(voiceDurations.values()), 0);
     
     maxDuration = Math.max(maxDuration, partDuration);
   });
@@ -187,7 +190,7 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
 
   return { 
     totalParts: parts.length, 
-    totalMeasures, 
+    totalMeasures: maxMeasures, 
     totalNotes, 
     title, 
     composer, 

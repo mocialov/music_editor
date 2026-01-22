@@ -19,13 +19,15 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
   const [measuresPerPage] = useState(50);
   const [usePagination, setUsePagination] = useState(false);
   const [volume, setVolume] = useState(-12); // Default volume in dB (-12dB is much quieter)
+  const [totalDuration, setTotalDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   
   const synthsRef = useRef<Map<string, Tone.PolySynth>>(new Map());
   const partRef = useRef<Tone.Part | null>(null);
   const notesDataRef = useRef<Array<{ time: number; note: string; duration: number; partId: string }>>([]);
   const animationFrameRef = useRef<number | null>(null);
   const cursorIndexRef = useRef<number>(0);
-  const [_currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const masterGainRef = useRef<Tone.Volume | null>(null);
   const reverbRef = useRef<Tone.Reverb | null>(null);
   const compressorRef = useRef<Tone.Compressor | null>(null);
@@ -336,6 +338,12 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
         
         partRef.current.loop = false;
       }
+      
+      // Calculate total duration
+      if (notes.length > 0) {
+        const maxTime = Math.max(...notes.map(n => n.time + n.duration));
+        setTotalDuration(maxTime);
+      }
     } catch (error) {
       console.error('Error parsing MusicXML:', error);
     }
@@ -405,6 +413,101 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
       setCurrentPage(1);
     }
   };
+
+  const seekToTime = (time: number) => {
+    const wasPlaying = isPlaying;
+    
+    // Stop playback temporarily
+    if (wasPlaying) {
+      Tone.Transport.pause();
+    }
+    
+    // Set transport time
+    Tone.Transport.seconds = time;
+    setCurrentTime(time);
+    
+    // Reset cursor and advance it to the appropriate position
+    if (osmd) {
+      osmd.cursor.reset();
+      
+      // Find the note closest to the target time
+      let targetNoteIndex = 0;
+      for (let i = 0; i < notesDataRef.current.length; i++) {
+        if (notesDataRef.current[i].time <= time) {
+          targetNoteIndex = i;
+        } else {
+          break;
+        }
+      }
+      
+      // Advance cursor to approximate position
+      // We advance based on unique time values to avoid over-advancing
+      const uniqueTimes = new Set<number>();
+      for (let i = 0; i <= targetNoteIndex; i++) {
+        uniqueTimes.add(Math.floor(notesDataRef.current[i].time * 10) / 10);
+      }
+      
+      const stepsToAdvance = Math.max(0, uniqueTimes.size - 1);
+      for (let i = 0; i < stepsToAdvance; i++) {
+        try {
+          osmd.cursor.next();
+        } catch (e) {
+          break;
+        }
+      }
+    }
+    
+    // Resume playback if it was playing
+    if (wasPlaying) {
+      Tone.Transport.start();
+    }
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!totalDuration) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const time = percentage * totalDuration;
+    
+    seekToTime(Math.max(0, Math.min(time, totalDuration)));
+  };
+
+  const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    handleProgressClick(e);
+  };
+
+  const handleProgressMouseMove = (e: MouseEvent) => {
+    if (!isDragging || !totalDuration) return;
+    
+    const progressBar = document.querySelector('.progress-bar-container') as HTMLDivElement;
+    if (!progressBar) return;
+    
+    const rect = progressBar.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
+    const time = percentage * totalDuration;
+    
+    seekToTime(time);
+  };
+
+  const handleProgressMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleProgressMouseMove);
+      window.addEventListener('mouseup', handleProgressMouseUp);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleProgressMouseMove);
+        window.removeEventListener('mouseup', handleProgressMouseUp);
+      };
+    }
+  }, [isDragging, totalDuration]);
 
   const handlePageChange = (newPage: number) => {
     if (!osmd || !usePagination || !containerRef.current) return;
@@ -551,6 +654,12 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
     return outputBuffer;
   };
 
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleDownloadMidi = async () => {
     try {
       if (notesDataRef.current.length === 0) {
@@ -631,6 +740,23 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
         <button className="play-button" onClick={handleStop}>
           ⏹
         </button>
+
+        <div className="playback-progress">
+          <span className="time-label">{formatTime(currentTime)}</span>
+          <div 
+            className="progress-bar-container"
+            onClick={handleProgressClick}
+            onMouseDown={handleProgressMouseDown}
+          >
+            <div 
+              className="progress-bar-fill" 
+              style={{ width: `${totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0}%` }}
+            >
+              <div className="progress-bar-handle" />
+            </div>
+          </div>
+          <span className="time-label">{formatTime(totalDuration)}</span>
+        </div>
 
         <button 
           className="play-button download-button" 

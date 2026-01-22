@@ -41,14 +41,14 @@ const calculateStats = (semantic: SemanticMusicXML, originalSize: number): Stats
   const dynamics = new Set<string>();
   const ornaments = new Set<string>();
   
-  let totalMeasures = 0;
+  let maxMeasures = 0;
   let totalNotes = 0;
   let tempo: number | null = null;
   let timeSignature: string | null = null;
   let keySignature: string | null = null;
 
   semantic.parts.forEach(part => {
-    totalMeasures += part.measures.length;
+    maxMeasures = Math.max(maxMeasures, part.measures.length);
 
     part.measures.forEach(measure => {
       // Get attributes from first measure
@@ -103,7 +103,7 @@ const calculateStats = (semantic: SemanticMusicXML, originalSize: number): Stats
 
   return {
     totalParts: semantic.parts.length,
-    totalMeasures,
+    totalMeasures: maxMeasures,
     totalNotes,
     title: semantic.title || null,
     composer: semantic.composer || null,
