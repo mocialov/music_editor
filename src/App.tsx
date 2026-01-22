@@ -103,7 +103,7 @@ function App() {
             </svg>
           </button>
           <div className="header-title-group">
-            <h1><span className="title-icon">🎹</span> Maestro AI</h1>
+            <h1><span className="title-icon">🎹</span> Mæstro AI</h1>
             <p className="subtitle">Compose, Edit & Transform Music with Intelligence</p>
           </div>
         </div>
