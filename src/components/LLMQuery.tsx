@@ -77,7 +77,7 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
       const rangeInfo = isRangeEdit && selectedRange
         ? `\n\nNote: You are editing measures ${selectedRange.start}-${selectedRange.end}${partInfo} only. Return only these measures in the same format.`
         : '';
-      const llm_prompt = `${query}${rangeInfo}\n\nHere is the music in compact semantic format:\n\n${semanticJson}\n\nPlease respond with the modified music in the same compact semantic JSON format.`;
+      const llm_prompt = `${query}${rangeInfo}\n\nHere is the music in compact semantic format:\n\n${semanticJson}\n\nIMPORTANT: Respond with ONLY valid JSON in the same compact semantic format. Do not add explanations, just the JSON object. Keep your response concise - include only the essential musical data.`;
 
       const apiKey = config.GEMINI_API_KEY;
       const modelId = config.GEMINI_MODEL_ID;
@@ -91,27 +91,62 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
       const geminiResponse = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
         {
-          contents: [{ role: "user", parts: [{ text: llm_prompt }] }],
-          generationConfig: { thinkingConfig: { "thinkingBudget": 0 } }
+          contents: [{ role: "user", parts: [{ text: llm_prompt }] }]
         },
         { headers: { "Content-Type": "application/json" } }
       );
 
       const responseText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       
+      console.log('LLM Response length:', responseText.length);
+      
       try {
-        let jsonText = responseText;
-        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1];
+        let jsonText = responseText.trim();
+        
+        // Remove markdown code blocks if present
+        if (jsonText.startsWith('```')) {
+          // Remove opening ```json or ```
+          jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '');
+          // Remove closing ```
+          jsonText = jsonText.replace(/\n?```\s*$/, '');
         }
-
-        const parsed = parseSemanticJSON(jsonText);
+        
+        jsonText = jsonText.trim();
+        console.log('Extracted JSON length:', jsonText.length);
+        
+        // Attempt to repair truncated JSON
+        let repairedJson = jsonText.trim();
+        if (!repairedJson.endsWith('}')) {
+          console.warn('JSON appears truncated, attempting repair...');
+          // Count open braces and brackets
+          const openBraces = (repairedJson.match(/\{/g) || []).length;
+          const closeBraces = (repairedJson.match(/\}/g) || []).length;
+          const openBrackets = (repairedJson.match(/\[/g) || []).length;
+          const closeBrackets = (repairedJson.match(/\]/g) || []).length;
+          
+          // Remove any incomplete trailing property
+          repairedJson = repairedJson.replace(/,\s*"[^"]*"\s*:\s*[^,}\]]*$/, '');
+          repairedJson = repairedJson.replace(/,\s*$/, '');
+          
+          // Close brackets
+          for (let i = 0; i < openBrackets - closeBrackets; i++) {
+            repairedJson += ']';
+          }
+          // Close braces
+          for (let i = 0; i < openBraces - closeBraces; i++) {
+            repairedJson += '}';
+          }
+          console.log('Repaired JSON');
+        }
+        
+        const parsed = parseSemanticJSON(repairedJson);
+        console.log('Parsed semantic:', parsed);
 
         if (onParsedResult && fullDocument) {
           let finalDocument: MusicXMLDocument;
           
           if (isRangeEdit && selectedRange) {
+            console.log('Editing measure range:', selectedRange);
             finalDocument = editMeasureRangeWithLLM(
               fullDocument, 
               selectedRange.start, 
@@ -127,7 +162,9 @@ export const LLMQuery: React.FC<LLMQueryProps> = ({ semanticFormat, onParsedResu
           setQuery('');
         }
       } catch (parseError) {
-        setError(`Failed to parse AI response. Please try again.`);
+        console.error('Parse error:', parseError);
+        const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown error';
+        setError(`Failed to parse AI response: ${errorMsg}`);
       }
     } catch (err) {
       setError(`AI Error: ${err instanceof Error ? err.message : 'Failed to connect'}`);

@@ -118,6 +118,28 @@
   accent-color: #3b82f6;
 }
 
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.volume-control input {
+  width: 80px;
+  accent-color: #10b981;
+  cursor: pointer;
+}
+
+.volume-control input::-webkit-slider-thumb {
+  cursor: pointer;
+}
+
+.volume-control span:first-child {
+  font-size: 1rem;
+}
+
 .sheet-music-container {
   background: white;
   padding: 1rem;
@@ -195,4 +217,17 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: #64748b;
+}
+
+.download-button {
+  background: #6366f1 !important;
+  width: auto !important;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px !important;
+}
+
+.download-button:hover {
+  background: #4f46e5 !important;
 }

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import * as Tone from 'tone';
+import { Midi } from '@tonejs/midi';
 import './MusicXMLPlayer.css';
 
 interface MusicXMLPlayerProps {
@@ -17,13 +18,17 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
   const [totalPages, setTotalPages] = useState(1);
   const [measuresPerPage] = useState(50);
   const [usePagination, setUsePagination] = useState(false);
+  const [volume, setVolume] = useState(-12); // Default volume in dB (-12dB is much quieter)
   
-  const synthRef = useRef<Tone.PolySynth | null>(null);
+  const synthsRef = useRef<Map<string, Tone.PolySynth>>(new Map());
   const partRef = useRef<Tone.Part | null>(null);
-  const notesDataRef = useRef<Array<{ time: number; note: string; duration: number }>>([]);
+  const notesDataRef = useRef<Array<{ time: number; note: string; duration: number; partId: string }>>([]);
   const animationFrameRef = useRef<number | null>(null);
   const cursorIndexRef = useRef<number>(0);
   const [_currentTime, setCurrentTime] = useState(0);
+  const masterGainRef = useRef<Tone.Volume | null>(null);
+  const reverbRef = useRef<Tone.Reverb | null>(null);
+  const compressorRef = useRef<Tone.Compressor | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -37,16 +42,21 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
     });
     setOsmd(newOsmd);
     
-    // Initialize synth
-    synthRef.current = new Tone.PolySynth(Tone.Synth).toDestination();
+    // Initialize audio effects chain
+    masterGainRef.current = new Tone.Volume(volume).toDestination();
+    reverbRef.current = new Tone.Reverb({ decay: 1.5, wet: 0.15 }).connect(masterGainRef.current);
+    compressorRef.current = new Tone.Compressor(-20, 3).connect(reverbRef.current);
     
     return () => {
       if (partRef.current) {
         partRef.current.dispose();
       }
-      if (synthRef.current) {
-        synthRef.current.dispose();
-      }
+      // Dispose all synths and effects
+      synthsRef.current.forEach(synth => synth.dispose());
+      synthsRef.current.clear();
+      masterGainRef.current?.dispose();
+      reverbRef.current?.dispose();
+      compressorRef.current?.dispose();
       Tone.Transport.stop();
       Tone.Transport.cancel();
     };
@@ -105,15 +115,25 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
     Tone.Transport.bpm.value = tempo;
   }, [tempo]);
 
+  useEffect(() => {
+    if (masterGainRef.current) {
+      masterGainRef.current.volume.value = volume;
+    }
+  }, [volume]);
+
   const createPlaybackSequence = () => {
-    if (!xmlContent || !synthRef.current) return;
+    if (!xmlContent) return;
     
     // Clear existing part
     if (partRef.current) {
       partRef.current.dispose();
     }
     
-    const notes: Array<{ time: number; note: string; duration: number }> = [];
+    // Clear and reinitialize synths
+    synthsRef.current.forEach(synth => synth.dispose());
+    synthsRef.current.clear();
+    
+    const notes: Array<{ time: number; note: string; duration: number; partId: string }> = [];
     
     try {
       const parser = new DOMParser();
@@ -133,7 +153,43 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
       const parts = xmlDoc.querySelectorAll('part');
       
       // Process each part - IMPORTANT: Each part starts at time 0 (they play simultaneously)
-      parts.forEach((part) => {
+      parts.forEach((part, partIndex) => {
+        const partId = part.getAttribute('id') || `P${partIndex + 1}`;
+        
+        // Create a synth for this part if it doesn't exist
+        if (!synthsRef.current.has(partId)) {
+          // Use AMSynth for more musical, less harsh sound
+          const synth = new Tone.PolySynth(Tone.AMSynth, {
+            harmonicity: 2.5,
+            oscillator: { type: 'sine' },
+            envelope: {
+              attack: 0.01,
+              decay: 0.2,
+              sustain: 0.3,
+              release: 0.8
+            },
+            modulation: { type: 'square' },
+            modulationEnvelope: {
+              attack: 0.01,
+              decay: 0.3,
+              sustain: 0.1,
+              release: 0.2
+            }
+          });
+          
+          // Add panning for stereo separation
+          const panner = new Tone.Panner((partIndex - parts.length / 2) * 0.3);
+          
+          // Connect to effects chain instead of directly to destination
+          if (compressorRef.current) {
+            synth.chain(panner, compressorRef.current);
+          } else {
+            synth.toDestination();
+          }
+          
+          synthsRef.current.set(partId, synth);
+        }
+        
         const measures = part.querySelectorAll('measure');
         let currentDivisions = 1;
         
@@ -166,6 +222,7 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
             const noteElement = element;
             const isRest = noteElement.querySelector('rest') !== null;
             const isChord = noteElement.querySelector('chord') !== null;
+            const isGrace = noteElement.querySelector('grace') !== null;
             
             // Get voice information for polyphonic music
             const voiceEl = noteElement.querySelector('voice');
@@ -182,7 +239,8 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
             const durationDivisions = durationElement ? parseInt(durationElement.textContent || '0') : 0;
             const noteDuration = durationDivisions * secondsPerDivision;
             
-            if (!isRest) {
+            // Only process notes that are not rests and not grace notes (to match stats counting)
+            if (!isRest && !isGrace) {
               const pitchElement = noteElement.querySelector('pitch');
               if (pitchElement) {
                 const step = pitchElement.querySelector('step')?.textContent || 'C';
@@ -197,9 +255,10 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
                 if (alter === -2) noteName = step + 'bb' + octave;
                 
                 notes.push({
-                  time: currentTime,
+                  time: Math.max(0, currentTime), // Ensure time is never negative
                   note: noteName,
-                  duration: noteDuration
+                  duration: Math.max(0.01, noteDuration), // Ensure duration is positive
+                  partId: partId
                 });
               }
             }
@@ -230,8 +289,15 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
         let lastCursorTime = -1;
         
         partRef.current = new Tone.Part((time, value) => {
-          if (typeof value === 'object' && 'note' in value && 'duration' in value) {
-            synthRef.current?.triggerAttackRelease(value.note, value.duration, time);
+          if (typeof value === 'object' && 'note' in value && 'duration' in value && 'partId' in value) {
+            // Ensure time is never negative (fix floating-point precision issues)
+            const safeTime = Math.max(0, time);
+            
+            // Use the synth for this specific part
+            const synth = synthsRef.current.get(value.partId);
+            if (synth) {
+              synth.triggerAttackRelease(value.note, value.duration, safeTime);
+            }
             
             // Schedule cursor advance at the exact moment this note plays
             Tone.Draw.schedule(() => {
@@ -374,7 +440,27 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
 
       // Use Tone.Offline to render audio
       const buffer = await Tone.Offline(({ transport }) => {
-        const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+        // Use same better synth for export
+        const gain = new Tone.Volume(-12).toDestination();
+        const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.15 }).connect(gain);
+        const compressor = new Tone.Compressor(-20, 3).connect(reverb);
+        const synth = new Tone.PolySynth(Tone.AMSynth, {
+          harmonicity: 2.5,
+          oscillator: { type: 'sine' },
+          envelope: {
+            attack: 0.01,
+            decay: 0.2,
+            sustain: 0.3,
+            release: 0.8
+          },
+          modulation: { type: 'square' },
+          modulationEnvelope: {
+            attack: 0.01,
+            decay: 0.3,
+            sustain: 0.1,
+            release: 0.2
+          }
+        }).connect(compressor);
         
         const part = new Tone.Part((time, value) => {
           if (typeof value === 'object' && 'note' in value && 'duration' in value) {
@@ -465,6 +551,76 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
     return outputBuffer;
   };
 
+  const handleDownloadMidi = async () => {
+    try {
+      if (notesDataRef.current.length === 0) {
+        alert('No notes to export. Please load a score first.');
+        return;
+      }
+
+      // Create MIDI file
+      const midi = new Midi();
+      const track = midi.addTrack();
+      
+      // Add notes to track
+      notesDataRef.current.forEach(noteData => {
+        track.addNote({
+          midi: Tone.Frequency(noteData.note).toMidi(),
+          time: noteData.time,
+          duration: noteData.duration,
+          velocity: 0.8
+        });
+      });
+      
+      // Set tempo
+      midi.header.setTempo(tempo);
+      
+      // Convert MIDI to blob
+      const midiArray = midi.toArray();
+      const blob = new Blob([midiArray as any], { type: 'audio/midi' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `music_${Date.now()}.mid`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting MIDI:', error);
+      alert('Failed to export MIDI. Please try again.');
+    }
+  };
+
+  const handleDownloadMusicXML = () => {
+    try {
+      if (!xmlContent) {
+        alert('No MusicXML content to download. Please load a score first.');
+        return;
+      }
+
+      // Create blob from XML content
+      const blob = new Blob([xmlContent], { type: 'application/vnd.recordare.musicxml+xml' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `music_${Date.now()}.musicxml`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting MusicXML:', error);
+      alert('Failed to export MusicXML. Please try again.');
+    }
+  };
+
   return (
     <div className="musicxml-player">
       <div className="player-controls-bar">
@@ -484,6 +640,22 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
           ⬇ WAV
         </button>
 
+        <button 
+          className="play-button download-button" 
+          onClick={handleDownloadMidi}
+          title="Download as MIDI"
+        >
+          ⬇ MIDI
+        </button>
+
+        <button 
+          className="play-button download-button" 
+          onClick={handleDownloadMusicXML}
+          title="Download as MusicXML"
+        >
+          ⬇ XML
+        </button>
+
         <div className="player-settings">
           <div className="tempo-control">
             <span>Tempo (BPM)</span>
@@ -495,6 +667,19 @@ export const MusicXMLPlayer: React.FC<MusicXMLPlayerProps> = ({ xmlContent }) =>
               onChange={(e) => setTempo(Number(e.target.value))}
             />
             <span>{tempo}</span>
+          </div>
+          
+          <div className="volume-control">
+            <span>🔊 Volume</span>
+            <input 
+              type="range" 
+              min="-40" 
+              max="0" 
+              value={volume} 
+              onChange={(e) => setVolume(Number(e.target.value))}
+              title={`${volume} dB`}
+            />
+            <span>{volume > -40 ? Math.round((volume + 40) / 40 * 100) + '%' : 'Mute'}</span>
           </div>
         </div>
       </div>

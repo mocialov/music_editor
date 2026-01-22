@@ -1072,6 +1072,94 @@ export function getSemanticTotalMeasures(semantic: SemanticMusicXML): number {
 }
 
 /**
+ * Merge new parts from semantic format into an existing document
+ * Used when LLM adds new instruments/parts to the composition
+ */
+function mergePartsIntoDocument(
+  original: MusicXMLDocument,
+  modifiedSemantic: SemanticMusicXML
+): MusicXMLDocument {
+  const originalScore = original['score-partwise'];
+  const originalPartList = originalScore['part-list'];
+  const originalScoreParts = Array.isArray(originalPartList['score-part']) 
+    ? originalPartList['score-part'] 
+    : [originalPartList['score-part']];
+  const originalParts = Array.isArray(originalScore.part) 
+    ? originalScore.part 
+    : [originalScore.part];
+  const originalPartIds = new Set(originalScoreParts.map(sp => sp['@id']));
+  
+  // Separate existing and new parts from LLM response
+  const existingParts: SemanticPart[] = [];
+  const newParts: SemanticPart[] = [];
+  
+  modifiedSemantic.parts.forEach(part => {
+    if (originalPartIds.has(part.id)) {
+      existingParts.push(part);
+    } else {
+      newParts.push(part);
+    }
+  });
+  
+  console.log('Merging parts - existing:', existingParts.length, 'new:', newParts.length);
+  
+  // Build new score-parts for the new parts
+  const newScoreParts: ScorePart[] = newParts.map(part => {
+    const scorePart: ScorePart = {
+      '@id': part.id,
+      'part-name': part.name,
+    };
+    
+    if (part.abbreviation) {
+      scorePart['part-abbreviation'] = part.abbreviation;
+    }
+    
+    if (part.instrument) {
+      scorePart['score-instrument'] = {
+        '@id': `${part.id}-I1`,
+        'instrument-name': part.instrument,
+      };
+    }
+    
+    if (part.midiProgram !== undefined || part.midiChannel !== undefined) {
+      scorePart['midi-instrument'] = {
+        '@id': `${part.id}-I1`,
+        'midi-channel': part.midiChannel || 1,
+        'midi-program': part.midiProgram || 1,
+      };
+    }
+    
+    return scorePart;
+  });
+  
+  // Build new Part objects for the new parts
+  const newPartObjects: Part[] = newParts.map(semPart => ({
+    '@id': semPart.id,
+    measure: decodeMeasures(semPart.measures),
+  }));
+  
+  // Merge score-parts
+  const mergedScoreParts = [...originalScoreParts, ...newScoreParts];
+  
+  // Merge parts
+  const mergedParts = [...originalParts, ...newPartObjects];
+  
+  // Create new document
+  const newScore: ScorePartwise = {
+    ...originalScore,
+    'part-list': {
+      ...originalPartList,
+      'score-part': mergedScoreParts.length === 1 ? mergedScoreParts[0] : mergedScoreParts,
+    },
+    part: mergedParts.length === 1 ? mergedParts[0] : mergedParts,
+  };
+  
+  return {
+    'score-partwise': newScore,
+  };
+}
+
+/**
  * Complete workflow for editing a measure range with LLM
  * 1. Extract measure range from original document
  * 2. Encode to semantic format for LLM
@@ -1102,10 +1190,27 @@ export function editMeasureRangeWithLLM(
     modifiedSemantic = parser.validate(llmResponse);
   }
   
-  // Convert modified semantic to full MusicXML
-  const modifiedDocument = decodeFromSemantic(modifiedSemantic);
+  // Get original part IDs
+  const originalScore = original['score-partwise'];
+  const originalPartList = originalScore['part-list'];
+  const originalScoreParts = Array.isArray(originalPartList['score-part']) 
+    ? originalPartList['score-part'] 
+    : [originalPartList['score-part']];
+  const originalPartIds = new Set(originalScoreParts.map(sp => sp['@id']));
   
-  // Replace the range in original document
+  // Check if LLM added new parts
+  const newPartIds = modifiedSemantic.parts
+    .map(p => p.id)
+    .filter(id => !originalPartIds.has(id));
+  
+  // If new parts were added, merge them with the original document
+  if (newPartIds.length > 0) {
+    console.log('Detected new parts added by LLM:', newPartIds);
+    return mergePartsIntoDocument(original, modifiedSemantic);
+  }
+  
+  // Otherwise, treat as measure range replacement
+  const modifiedDocument = decodeFromSemantic(modifiedSemantic);
   return replaceMeasureRange(original, modifiedDocument, startMeasure, endMeasure, partId);
 }
 

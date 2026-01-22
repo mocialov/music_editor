@@ -6,6 +6,7 @@ import { MusicXMLStats } from './components/MusicXMLStats'
 import { LLMQuery } from './components/LLMQuery'
 import { ConfigMenu } from './components/ConfigMenu'
 import { MusicXMLParser, type MusicXMLDocument, type SemanticMusicXML, encodeToSemantic, getPartsInfo, getTotalMeasures } from './utils/musicxml-parser'
+import { convertMidiToMusicXML } from './utils/midi-converter'
 import { config } from './config'
 
 function App() {
@@ -69,6 +70,22 @@ function App() {
     config.setModelId(modelId);
   }, [])
 
+  const handleMidiGenerated = useCallback(async (midiBlob: Blob) => {
+    try {
+      // Convert MIDI blob to ArrayBuffer
+      const arrayBuffer = await midiBlob.arrayBuffer()
+      
+      // Convert MIDI to MusicXML
+      const musicXML = await convertMidiToMusicXML(arrayBuffer)
+      
+      // Load the MusicXML
+      handleFileLoad(musicXML)
+    } catch (error) {
+      console.error('Error converting MIDI to MusicXML:', error)
+      setParseError(error instanceof Error ? error.message : 'Failed to convert MIDI to MusicXML')
+    }
+  }, [])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -94,7 +111,7 @@ function App() {
 
       <main className="app-main">
         {!xmlContent ? (
-          <FileUploader onFileLoad={handleFileLoad} />
+          <FileUploader onFileLoad={handleFileLoad} onMidiGenerated={handleMidiGenerated} />
         ) : (
           <>
             <aside className="sidebar">

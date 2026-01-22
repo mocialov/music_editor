@@ -130,23 +130,34 @@ const calculateStats = (document: MusicXMLDocument): Stats => {
           }
           
           // Count tied notes
-          if (note.tie) {
+          // note.tie can be an empty object {}, so check for undefined
+          if (note.tie !== undefined) {
             tiedNotes++;
           }
           
           // Count grace notes
-          if (note.grace) {
+          // note.grace can be an empty object {}, so check for undefined
+          if (note.grace !== undefined) {
             graceNotes++;
           }
           
           // Count tuplets
-          if (note['time-modification']) {
+          // note['time-modification'] can be an empty object {}, so check for undefined
+          if (note['time-modification'] !== undefined) {
             tuplets++;
           }
           
-          if (!note.chord && !note.grace) {
+          // Count all notes (including chord members) to match playback extraction
+          // Only exclude rests and grace notes
+          // Note: note.rest can be an empty object {}, which is truthy, so check for pitch instead
+          if (note.pitch && note.grace === undefined) {
             totalNotes++;
-            if (note.duration) partDuration += typeof note.duration === 'string' ? parseInt(note.duration) : note.duration;
+          }
+          
+          // Duration tracking: only for non-chord, non-grace notes to avoid double-counting time
+          // note.chord and note.grace can be empty objects {}, so check for undefined
+          if (note.chord === undefined && note.grace === undefined && note.duration) {
+            partDuration += typeof note.duration === 'string' ? parseInt(note.duration) : note.duration;
           }
         });
         
