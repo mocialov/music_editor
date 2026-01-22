@@ -32,3 +32,11 @@ dist-ssr
 *.py
 *.pyc
 __pycache__/
+.venv/
+venv/
+
+# macOS files
+.DS_Store
+
+# Generated MIDI files
+*.mid
